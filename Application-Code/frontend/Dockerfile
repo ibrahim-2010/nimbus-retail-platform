@@ -2,7 +2,7 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 COPY . .
 ARG REACT_APP_BACKEND_URL=/api
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
