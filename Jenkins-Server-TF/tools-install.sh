@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # Tools Installation Script for Jenkins Server (Ubuntu 22.04)
-# Installs: Java, Jenkins, Docker, SonarQube, AWS CLI, kubectl, eksctl,
-#           Terraform, Trivy, Helm
+# Installs: Java, Jenkins, Docker, SonarQube, Sonar-Scanner, AWS CLI,
+#           kubectl, eksctl, Terraform, Trivy, Helm
 # =============================================================================
 
 # ─── Java 17 ─────────────────────────────────────────────────────────────────
@@ -36,7 +36,16 @@ sudo chmod 777 /var/run/docker.sock
 
 # ─── SonarQube (Docker container) ────────────────────────────────────────────
 echo "===> Starting SonarQube container"
-docker run -d --name sonar -p 9000:9000 sonarqube:lts-community
+docker run -d --name sonar --restart unless-stopped -p 9000:9000 sonarqube:lts-community
+
+# ─── Sonar-Scanner ───────────────────────────────────────────────────────────
+echo "===> Installing Sonar-Scanner"
+wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+unzip -o sonar-scanner-cli-5.0.1.3006-linux.zip
+sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+sudo ln -sf /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner
+rm -f sonar-scanner-cli-5.0.1.3006-linux.zip
+sonar-scanner --version
 
 # ─── AWS CLI ─────────────────────────────────────────────────────────────────
 echo "===> Installing AWS CLI"
