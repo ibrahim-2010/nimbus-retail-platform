@@ -111,6 +111,20 @@ resource "aws_iam_role_policy_attachment" "jenkins_policies" {
   policy_arn = each.value
 }
 
+resource "aws_iam_role_policy" "eks_full_access" {
+  name = "EKSFullAccess"
+  role = aws_iam_role.jenkins_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "eks:*"
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "jenkins_profile" {
   name = "jenkins-cloud-native-profile"
   role = aws_iam_role.jenkins_role.name
