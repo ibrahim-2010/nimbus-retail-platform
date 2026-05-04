@@ -1,0 +1,36 @@
+# ══════════════════════════════════════════════════════════════
+#  App-of-Apps — Root ArgoCD Application
+#
+#  This is the ONLY application you create manually:
+#    kubectl apply -f argocd/app-of-apps.yaml
+#
+#  It watches the argocd/apps/ directory in Git. Every YAML
+#  file in that directory becomes a child ArgoCD Application.
+#  Add a new app? Just add a YAML file and push to Git.
+# ══════════════════════════════════════════════════════════════
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/ibrahim-2010/cloud-native-eks.git
+    targetRevision: main
+    path: argocd/apps
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
