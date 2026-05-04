@@ -1,0 +1,135 @@
+# ══════════════════════════════════════════════════════════════
+#  Jenkins Configuration as Code (JCasC)
+#  Replaces ALL manual Phase 3 configuration:
+#    - Credentials (github-creds, github-token, ACCOUNT_ID, etc.)
+#    - SonarQube server configuration
+#    - Pipeline job definitions
+#    - Security settings
+#
+#  Sensitive values are injected via environment variables.
+#  Set these BEFORE Jenkins starts:
+#    GITHUB_USERNAME, GITHUB_PAT, AWS_ACCOUNT_ID, SONARQUBE_TOKEN
+# ══════════════════════════════════════════════════════════════
+
+jenkins:
+  systemMessage: "Cloud-Native EKS Project — Configured via JCasC"
+
+  # Security — create admin user
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin123}"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  # Number of executors on the built-in node
+  numExecutors: 2
+
+# ──────────────────────────────────────────────
+#  Credentials
+# ──────────────────────────────────────────────
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # GitHub — Username with password (for SCM checkout)
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-creds"
+              description: "GitHub credentials for SCM checkout"
+              username: "${GITHUB_USERNAME}"
+              password: "${GITHUB_PAT}"
+
+          # GitHub — Secret text (for pipeline git push)
+          - string:
+              scope: GLOBAL
+              id: "github-token"
+              description: "GitHub PAT for pipeline git push"
+              secret: "${GITHUB_PAT}"
+
+          # AWS Account ID
+          - string:
+              scope: GLOBAL
+              id: "ACCOUNT_ID"
+              description: "AWS Account ID"
+              secret: "${AWS_ACCOUNT_ID}"
+
+          # ECR Repo names
+          - string:
+              scope: GLOBAL
+              id: "ECR_REPO1"
+              description: "Frontend ECR repository name"
+              secret: "frontend"
+
+          - string:
+              scope: GLOBAL
+              id: "ECR_REPO2"
+              description: "Backend ECR repository name"
+              secret: "backend"
+
+          # SonarQube token
+          - string:
+              scope: GLOBAL
+              id: "sonar"
+              description: "SonarQube authentication token"
+              secret: "${SONARQUBE_TOKEN}"
+
+# ──────────────────────────────────────────────
+#  SonarQube Server Configuration
+# ──────────────────────────────────────────────
+unclassified:
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: "sonar"
+        serverUrl: "http://localhost:9000"
+        credentialsId: "sonar"
+        triggers:
+          skipScmCause: false
+          skipUpstreamCause: false
+
+# ──────────────────────────────────────────────
+#  Pipeline Job Definitions
+# ──────────────────────────────────────────────
+jobs:
+  - script: >
+      pipelineJob('three-tier-backend') {
+        description('Backend CI/CD Pipeline — SonarQube + Trivy + ECR + GitOps')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
+                  credentials('github-creds')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Backend')
+          }
+        }
+      }
+
+  - script: >
+      pipelineJob('three-tier-frontend') {
+        description('Frontend CI/CD Pipeline — SonarQube + Trivy + ECR + GitOps')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
+                  credentials('github-creds')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Frontend')
+          }
+        }
+      }

@@ -1,0 +1,34 @@
+# Jenkins Plugins — installed automatically via jenkins-plugin-cli
+# These replace the manual "Manage Jenkins > Plugins > Available" step
+
+# Pipeline essentials
+workflow-aggregator
+pipeline-stage-view
+git
+
+# Docker integration
+docker-pipeline
+docker-commons
+
+# Security scanning
+sonar
+dependency-check-jenkins-plugin
+
+# AWS integration
+pipeline-aws
+
+# Kubernetes
+kubernetes-cli
+
+# Configuration as Code
+configuration-as-code
+
+# Credentials
+credentials
+credentials-binding
+plain-credentials
+
+# UI & utility
+blueocean
+ws-cleanup
+timestamper
