@@ -3,6 +3,7 @@
 [![LinkedIn](https://img.shields.io/badge/Connect%20with%20me%20on-LinkedIn-blue.svg)](https://www.linkedin.com/in/ibrahim)
 [![GitHub](https://img.shields.io/github/stars/ibrahim-2010/cloud-native-eks.svg?style=social)](https://github.com/ibrahim-2010)
 [![Live App](https://img.shields.io/badge/Live%20App-platinum--consults.com-green)](http://platinum-consults.com)
+[![Grafana](https://img.shields.io/badge/Grafana-grafana.platinum--consults.com-orange)](http://grafana.platinum-consults.com)
 
 [![AWS](https://img.shields.io/badge/AWS-%F0%9F%9B%A1-orange)](https://aws.amazon.com)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-%E2%9C%A8-blue)](https://kubernetes.io)
@@ -15,53 +16,30 @@
 
 Welcome to the Cloud-Native DevSecOps Three-Tier Application Deployment project! 🚀
 
-This repository hosts the implementation of a **Three-Tier Web App** using **ReactJS**, **Node.js**, **PostgreSQL**, and **Redis**, deployed on **AWS EKS**. The project covers a wide range of tools and practices for a robust, scalable, and secure DevOps setup.
+This repository hosts the implementation of a **Three-Tier Web App** using **ReactJS**, **Node.js**, **PostgreSQL**, and **Redis**, deployed on **AWS EKS**. The entire platform is **Infrastructure as Code** — from bootstrap to teardown, every component is declarative and automated.
 
-> ⚡ **This is not a tutorial follow-along.** Every configuration, fix, and workaround in this repo comes from two real deployment cycles with real errors, real debugging, and real solutions. **13 production issues documented.**
-
----
-
-## 📋 Table of Contents
-
-- [Project Overview](#-project-overview)
-- [Architecture](#-architecture)
-- [Tech Stack](#-tech-stack)
-- [Repository Structure](#-repository-structure)
-- [Prerequisites](#-prerequisites)
-- [Deployment Guide](#-deployment-guide)
-- [CI/CD Pipeline Stages](#-cicd-pipeline-stages)
-- [Monitoring & Alerts](#-monitoring--alerts)
-- [Challenges & Solutions](#-challenges--solutions)
-- [Reports](#-reports)
-- [Cleanup](#-cleanup)
-- [Author](#-author)
+> ⚡ **Built across 4 deployment cycles. 17 production issues encountered and resolved.** Every fix is documented. This is not a tutorial follow-along.
 
 ---
 
 ## 📖 Project Overview
 
-🛠️ **Tools Explored:**
+🛠️ **Infrastructure as Code — Everything Automated:**
 
-- **Terraform & AWS CLI** for AWS infrastructure provisioning
-- **Jenkins, SonarQube, Trivy** for DevSecOps CI/CD pipeline
-- **Docker & ECR** for containerization and private registry
-- **EKS & kubectl** for Kubernetes orchestration
-- **Helm, Prometheus, and Grafana** for monitoring & alerting
-- **ArgoCD** for GitOps practices
-- **Route 53 & ALB** for DNS and load balancing
+- **Terraform** provisions Jenkins server, EKS cluster, VPC, ALB controller, EBS CSI driver, ExternalDNS, and Prometheus/Grafana monitoring
+- **JCasC** (Jenkins Configuration as Code) auto-configures plugins, credentials, SonarQube, and pipeline jobs — zero UI clicking
+- **ArgoCD App-of-Apps** pattern deploys all application components from a single `kubectl apply`
+- **ExternalDNS** auto-creates Route 53 records from Ingress annotations
+- **Bootstrap + Destroy scripts** for full lifecycle management
 
-🚢 **High-Level Overview:**
+🚢 **The deployment covers:**
 
-- IAM User setup & Terraform magic on AWS
-- Jenkins deployment with SonarQube and Trivy integration
-- EKS Cluster creation & ALB Ingress Controller configuration
-- Private ECR repositories for secure image management
-- 9-stage DevSecOps pipeline with security scanning at every layer
-- GitOps with ArgoCD — Git as the single source of truth
-- Custom Prometheus alerting rules for production readiness
-- DNS configuration with Route 53 for custom domain access
-
-📈 **The journey covered everything from setting up tools to deploying a Three-Tier app, implementing security scanning, ensuring data persistence, setting up monitoring, and debugging 13 real production issues across two full deployment cycles.**
+1. **Bootstrap** — S3, DynamoDB, ECR, key pair (one idempotent script)
+2. **Jenkins Server** — Terraform + JCasC with 102 pre-installed plugins and automated SonarQube setup
+3. **EKS Cluster** — Terraform creates VPC, cluster, node groups, OIDC, EBS CSI, ALB controller, ExternalDNS, and monitoring stack
+4. **Application Deployment** — ArgoCD App-of-Apps deploys database, backend, frontend, ingress, and Grafana ingress
+5. **CI/CD Pipeline** — 9-stage DevSecOps pipeline with SonarQube + Trivy + ECR + GitOps
+6. **Teardown** — Ordered destroy script
 
 ---
 
@@ -76,6 +54,13 @@ Code Push → Jenkins → SonarQube Analysis → Quality Gate → Trivy FS Scan
     → Update K8s Manifest in Git → ArgoCD Auto-Deploy → EKS
 ```
 
+**DNS Flow (Automated):**
+```
+Ingress Annotation → ExternalDNS → Route 53 A Record → ALB
+platinum-consults.com         → App ALB
+grafana.platinum-consults.com → Grafana ALB
+```
+
 ---
 
 ## 🧰 Tech Stack
@@ -85,16 +70,16 @@ Code Push → Jenkins → SonarQube Analysis → Quality Gate → Trivy FS Scan
 | ☁️ **Cloud** | AWS (us-east-1) | EKS, ECR, ALB, Route 53, IAM, EBS, S3 |
 | ⎈ **Orchestration** | Kubernetes (EKS) | Container orchestration, service discovery |
 | ⚛️ **Frontend** | React + Nginx | SPA served via multi-stage Docker build (~25MB) |
-| 🟢 **Backend** | Node.js + Express | REST API with health checks, CRUD operations |
+| 🟢 **Backend** | Node.js + Express | REST API with health checks, CRUD, Redis caching |
 | 🐘 **Database** | PostgreSQL 15 | Persistent storage with PVC on EBS |
 | 🔴 **Cache** | Redis 7 Alpine | In-memory caching with TTL, LRU eviction |
-| 🔧 **CI/CD** | Jenkins | 9-stage automated DevSecOps pipeline |
-| 🔍 **Code Quality** | SonarQube | Static analysis, quality gates |
+| 🔧 **CI/CD** | Jenkins + JCasC | 9-stage automated DevSecOps pipeline, zero-click setup |
+| 🔍 **Code Quality** | SonarQube | Static analysis, quality gates (auto-configured) |
 | 🛡️ **Security** | Trivy | Filesystem + image vulnerability scanning |
-| 🔄 **GitOps** | ArgoCD | Automatic deployment from Git state |
-| 📝 **IaC** | Terraform | Jenkins server with S3 remote state |
-| 📊 **Monitoring** | Prometheus + Grafana | Metrics, dashboards, custom alerts |
-| 🌐 **DNS** | Route 53 | Domain management, ALB alias records |
+| 🔄 **GitOps** | ArgoCD | App-of-Apps pattern, automatic deployment from Git |
+| 📝 **IaC** | Terraform | Full stack — Jenkins, EKS, VPC, ALB, DNS, monitoring |
+| 📊 **Monitoring** | Prometheus + Grafana | Metrics, dashboards, custom alerts (Terraform-managed) |
+| 🌐 **DNS** | Route 53 + ExternalDNS | Automatic DNS from Ingress annotations |
 | 📦 **Registry** | Amazon ECR | Private Docker image storage |
 | 🚪 **Ingress** | AWS LB Controller | L7 load balancing, path-based routing |
 
@@ -113,31 +98,45 @@ cloud-native-eks/
 │       ├── src/App.js                  # Task manager with live health indicators
 │       ├── Dockerfile                  # Multi-stage build (Node → Nginx, ~25MB)
 │       └── nginx.conf                  # SPA routing, security headers
+├── 📂 EKS-Terraform/                  # ⭐ Full EKS IaC (replaces eksctl)
+│   ├── main.tf                         # VPC, EKS cluster, node groups, OIDC
+│   ├── ebs-csi.tf                      # EBS CSI driver addon + IRSA
+│   ├── alb-controller.tf               # ALB controller IAM + IRSA
+│   ├── helm-alb.tf                     # ALB controller Helm release
+│   ├── helm-monitoring.tf              # Prometheus + Grafana Helm release
+│   ├── external-dns-iam.tf             # ExternalDNS IAM + Route 53 hosted zone
+│   ├── helm-external-dns.tf            # ExternalDNS Helm release
+│   ├── namespaces.tf                   # three-tier, monitoring, argocd
+│   ├── providers.tf                    # Kubernetes + Helm providers
+│   ├── variables.tf                    # All configurable values
+│   ├── outputs.tf                      # Cluster endpoint, kubectl command
+│   └── backend.tf                      # S3 remote state
+├── 📂 Jenkins-Server-TF/
+│   ├── main.tf                         # EC2, SG, IAM role + EKS inline policy
+│   ├── tools-install.sh                # 13 tools + 102 plugins pre-installed
+│   └── 📂 jcasc/
+│       ├── jenkins.yaml                # JCasC config
+│       └── setup-jcasc.sh             # One-command secret injection
 ├── 📂 Jenkins-Pipeline-Code/
 │   ├── Jenkinsfile-Backend             # 9-stage DevSecOps pipeline
 │   └── Jenkinsfile-Frontend            # 9-stage DevSecOps pipeline
-├── 📂 Jenkins-Server-TF/
-│   ├── main.tf                         # EC2, SG, IAM role + instance profile
-│   ├── backend.tf                      # S3 + DynamoDB remote state
-│   ├── variables.tf                    # Region, instance type, key name
-│   ├── outputs.tf                      # Jenkins URL, SonarQube URL, SSH command
-│   └── tools-install.sh                # Bootstrap script (13 tools)
 ├── 📂 Kubernetes-Manifests-file/
 │   ├── 📂 Database/
 │   │   ├── postgres.yaml               # Secret + PVC + Deployment + Service
 │   │   └── redis.yaml                  # Deployment + Service
-│   ├── 📂 Backend/
+│   ├── 📂 Backend/ & Frontend/
 │   │   └── deployment.yaml             # Deployment + Service
-│   ├── 📂 Frontend/
-│   │   └── deployment.yaml             # Deployment + Service
-│   ├── ingress.yaml                    # ALB with path-based routing
+│   ├── ingress.yaml                    # ALB + ExternalDNS annotation
+│   ├── grafana-ingress.yaml            # Grafana ALB + ExternalDNS subdomain
 │   └── monitoring-alerts.yaml          # Custom PrometheusRule (5 alerts)
+├── 📂 argocd/
+│   ├── app-of-apps.yaml                # ⭐ Root app (one kubectl apply)
+│   └── 📂 apps/                       # Child apps auto-created
 ├── 📂 docs/
-│   └── ISSUES-REPORT.md                # Detailed report on all 13 issues
-├── 📂 .github/workflows/
-│   └── ci.yml                          # YAML + Terraform validation
-├── .gitignore
-├── LICENSE
+│   ├── DEPLOYMENT-GUIDE.md
+│   └── ISSUES-REPORT.md
+├── bootstrap.sh                        # ⭐ One-command prerequisite setup
+├── destroy.sh                          # ⭐ Ordered teardown script
 └── README.md
 ```
 
@@ -145,188 +144,130 @@ cloud-native-eks/
 
 ## ✅ Prerequisites
 
-- AWS Account with IAM user (EC2, EKS, ECR, S3, Route 53, IAM, VPC, CloudFormation)
-- AWS CLI v2 configured locally
+- AWS Account with IAM user
+- AWS CLI v2 configured
 - Terraform >= 1.9.0
-- **vCPU quota ≥ 16** (request at: EC2 → Limits → Running On-Demand Standard instances)
+- **vCPU quota ≥ 20**
 - Git & GitHub account with PAT
 - Domain name with ability to change nameservers
-- SSH key pair in us-east-1
 
 ---
 
-## 🚀 Deployment Guide
+## 🚀 Deployment Guide (5 Commands)
 
-### Phase 1: AWS Foundation
-Create S3 bucket + DynamoDB for Terraform state, EC2 key pair, and ECR repositories.
-
-### Phase 2: Provision Jenkins Server
-Terraform provisions an m7i-flex.large EC2 with Jenkins, Docker, SonarQube, Terraform, AWS CLI, kubectl, eksctl, Helm, Trivy, and sonar-scanner.
-
-### Phase 3: Configure Jenkins & SonarQube
-Unlock Jenkins, install plugins, create credentials (github-creds + github-token), configure SonarQube server and webhook.
-
-### Phase 4: Create EKS Cluster
 ```bash
-eksctl create cluster --name cloud-native-cluster --region us-east-1 \
-  --zones us-east-1a,us-east-1b --nodegroup-name worker-nodes \
-  --node-type t3.xlarge --nodes 2 --nodes-min 2 --nodes-max 3 --managed
-```
-Create namespaces, install EBS CSI driver, copy kubeconfig to Jenkins user.
+# 1. Bootstrap
+bash bootstrap.sh
 
-### Phase 5: Deploy Database Layer
-```bash
-kubectl apply -f Kubernetes-Manifests-file/Database/
+# 2. Deploy Jenkins
+cd Jenkins-Server-TF && terraform init && terraform apply -auto-approve
+
+# 3. Setup Jenkins (one interactive command)
+ssh -i test.pem ubuntu@<jenkins-ip>
+sudo bash /opt/setup-jcasc.sh
+
+# 4. Deploy EKS + everything
+cd EKS-Terraform && terraform init && terraform apply -auto-approve
+
+# 5. Deploy apps
+kubectl apply -f argocd/app-of-apps.yaml
 ```
 
-### Phase 6: Build & Deploy Application
-Bootstrap: Build Docker images → Push to ECR → Update manifests → Deploy → **Push to Git before ArgoCD**.
-
-### Phase 7: ALB Ingress Controller
-Install AWS Load Balancer Controller via Helm. **Update IAM policy with broader permissions** immediately after creation.
-
-### Phase 8: ArgoCD GitOps
-```bash
-kubectl apply -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
-  --server-side --force-conflicts
-```
-Create 3 applications with automatic sync + prune + self-heal.
-
-### Phase 9: Jenkins CI/CD Pipelines
-Create backend and frontend pipeline jobs. Run Build Now to verify full DevSecOps pipeline.
-
-### Phase 10: Monitoring Stack
-```bash
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --timeout 10m
-```
-Apply custom PrometheusRule alerts. Access Grafana via LoadBalancer.
-
-### Phase 11: Domain & DNS
-Create Route 53 hosted zone, update nameservers at registrar, create A record alias to ALB.
-
-> 📖 **For the complete step-by-step guide with every command, see the [Full Deployment Guide](docs/DEPLOYMENT-GUIDE.md)**
+> 📖 **[Full Deployment Guide](docs/DEPLOYMENT-GUIDE.md)** | ⚠️ **[Issues Report](docs/ISSUES-REPORT.md)**
 
 ---
 
 ## 🔄 CI/CD Pipeline Stages
 
-Both backend and frontend pipelines execute these **9 stages**:
-
 | # | Stage | Tool | Purpose |
 |---|-------|------|---------|
-| 1 | 🧹 Cleanup Workspace | Jenkins | Wipe workspace for fresh build |
-| 2 | 📥 Checkout Code | Git | Clone repo from GitHub |
-| 3 | 🔍 SonarQube Analysis | sonar-scanner | Static code analysis |
-| 4 | ✅ Quality Gate | SonarQube | Pass/fail gate on code quality |
-| 5 | 🛡️ Trivy FS Scan | Trivy | Scan source for vulnerabilities |
-| 6 | 🐳 Docker Build & Tag | Docker | Build container image |
-| 7 | 🛡️ Trivy Image Scan | Trivy | Scan image for CVEs |
-| 8 | 📤 Push to ECR | AWS ECR | Push to private registry |
-| 9 | 📝 Update Manifest | sed + git | Update YAML, trigger ArgoCD |
-
-> After Stage 9, **ArgoCD** detects the Git change within 3 minutes and automatically deploys the new version. Zero manual intervention.
+| 1 | 🧹 Cleanup | Jenkins | Fresh workspace |
+| 2 | 📥 Checkout | Git | Clone repo |
+| 3 | 🔍 SonarQube | sonar-scanner | Code quality |
+| 4 | ✅ Quality Gate | SonarQube | Pass/fail |
+| 5 | 🛡️ Trivy FS | Trivy | Source scan |
+| 6 | 🐳 Docker Build | Docker | Build image |
+| 7 | 🛡️ Trivy Image | Trivy | Image CVEs |
+| 8 | 📤 Push ECR | AWS ECR | Private registry |
+| 9 | 📝 Update Manifest | sed + git | Trigger ArgoCD |
 
 ---
 
 ## 📊 Monitoring & Alerts
 
-### Custom PrometheusRule Alerts
+| Component | Access |
+|-----------|--------|
+| Grafana | `grafana.platinum-consults.com` |
+| Prometheus | Internal (ClusterIP) |
+| Alertmanager | Internal (ClusterIP) |
 
-| Alert | Condition | Severity |
-|-------|-----------|----------|
-| 🔴 PodDown | Available replicas < desired | Critical |
-| 🟡 HighCPUUsage | CPU > 80% for 2 minutes | Warning |
-| 🔴 PodCrashLooping | Repeated restarts over 15 min | Critical |
-| 🔴 PostgreSQLDown | Zero PostgreSQL pods | Critical |
-| 🔴 RedisDown | Zero Redis pods | Critical |
+| Alert | Severity |
+|-------|----------|
+| 🔴 PodDown | Critical |
+| 🟡 HighCPUUsage | Warning |
+| 🔴 PodCrashLooping | Critical |
+| 🔴 PostgreSQLDown | Critical |
+| 🔴 RedisDown | Critical |
 
 ---
 
 ## ⚠️ Challenges & Solutions
 
-**13 real issues** encountered across two full deployment cycles. Not hypothetical — all documented from actual debugging sessions.
+**17 issues** across 4 deployments — [Full Report](docs/ISSUES-REPORT.md)
 
-| # | Challenge | Root Cause | Solution |
-|---|-----------|-----------|----------|
-| 1 | `eks:DescribeClusterVersions` denied | Managed policies miss newer EKS APIs | Inline policy with `eks:*` |
-| 2 | Instance profile creds cached | IMDS caches IAM credentials | Export credentials directly |
-| 3 | `npm ci` build failure | No `package-lock.json` | Use `npm install --omit=dev` |
-| 4 | ArgoCD CRD too large | Annotations > 262144 bytes | `--server-side --force-conflicts` |
-| 5 | ArgoCD overwrote working pods | Git had placeholder values | Push to Git BEFORE ArgoCD |
-| 6 | Pods Pending (pod limit) | t3.small ENI: 11 pods/node | Upgrade to t3.xlarge |
-| 7 | Can't add 4th node | vCPU quota limit of 8 | Request increase to 20 |
-| 8 | Quality Gate timeout | No SonarQube webhook | Add webhook to Jenkins |
-| 9 | SCM credential empty | Wrong credential type | Username with password type |
-| 10 | `sonar-scanner` not found | User-data failed silently | Manual install |
-| 11 | ALB not provisioning | IAM policy missing new actions | Broader ELB + EC2 permissions |
-| 12 | `ImagePullBackOff` | Stale image tags from old builds | sed to correct tags |
-| 13 | Ingress ADDRESS empty | Ingress before controller | Delete and reapply |
-
-> 📖 **For detailed root cause analysis, investigation steps, and prevention strategies, see the [Full Issues Report](docs/ISSUES-REPORT.md)**
+| # | Challenge | Solution |
+|---|-----------|----------|
+| 1 | `eks:DescribeClusterVersions` denied | EKS inline policy in Terraform |
+| 2 | Instance profile creds cached | Export credentials directly |
+| 3 | `npm ci` build failure | `npm install --omit=dev` |
+| 4 | ArgoCD CRD too large | `--server-side --force-conflicts` |
+| 5 | ArgoCD overwrote pods | Push to Git before ArgoCD |
+| 6 | Pods Pending (pod limit) | t3.xlarge (58 pods/node) |
+| 7 | vCPU quota limit | Request increase to 20 |
+| 8 | Quality Gate timeout | Webhook via private IP |
+| 9 | SCM credential empty | Username with password type |
+| 10 | sonar-scanner not found | jenkins-plugin-manager JAR |
+| 11 | ALB not provisioning | Broader IAM in Terraform |
+| 12 | ImagePullBackOff | sed regex to correct tags |
+| 13 | Ingress ADDRESS empty | Delete and reapply |
+| 14 | JCasC sonarGlobalConfiguration | Groovy init script |
+| 15 | Plugin dependency hell | jenkins-plugin-manager JAR |
+| 16 | SonarQube rejects localhost | Private IP for webhook |
+| 17 | Grafana wrong datasource | Clean old configmaps, Terraform manages monitoring |
 
 ---
 
 ## 📈 Reports
 
-### Infrastructure Summary
+### Automation Report
 
-| Resource | Specification | Count |
-|----------|--------------|-------|
-| EKS Cluster | Kubernetes v1.34, us-east-1 | 1 |
-| Worker Nodes | t3.xlarge (4 vCPU, 16GB RAM) | 2 |
-| Jenkins Server | m7i-flex.large (EC2) | 1 |
-| Application Load Balancer | Internet-facing, path-based routing | 1 |
-| ECR Repositories | frontend, backend | 2 |
-| EBS Volumes | gp2, 5Gi (PostgreSQL PVC) | 1 |
-| Route 53 Hosted Zone | platinum-consults.com | 1 |
-
-### Application Stack
-
-| Component | Image | Port | Health Check |
-|-----------|-------|------|-------------|
-| Frontend | React + Nginx (~25MB) | 80 | /nginx-health |
-| Backend API | Node.js 18 Alpine | 3001 | /api/health |
-| PostgreSQL | postgres:15-alpine | 5432 | pg_isready |
-| Redis | redis:7-alpine | 6379 | redis-cli ping |
+| Phase | Before | After |
+|-------|--------|-------|
+| Prerequisites | 6 CLI commands | `bash bootstrap.sh` |
+| Jenkins | 15+ UI clicks | `terraform apply` + `setup-jcasc.sh` |
+| EKS + networking | eksctl + 8 commands | `terraform apply` (41 resources) |
+| Monitoring | Manual helm + config | Terraform Helm provider |
+| DNS | Console clicking | ExternalDNS (automatic) |
+| Apps | 3 ArgoCD UI forms | `kubectl apply -f app-of-apps.yaml` |
+| Teardown | 8 commands | `bash destroy.sh` |
 
 ### Security Report
 
 | Check | Tool | Result |
 |-------|------|--------|
-| Code Quality | SonarQube | ✅ Quality Gate Passed |
-| Source Vulnerabilities | Trivy FS | ✅ No Critical blocking |
+| Code Quality | SonarQube | ✅ Passed |
+| Source CVEs | Trivy FS | ✅ Clean |
 | Image CVEs | Trivy Image | ✅ Scanned |
-| Secrets Management | K8s Secrets + Jenkins | ✅ No hardcoded secrets |
-| Container Runtime | Non-root user | ✅ Security best practice |
-| Database Access | ClusterIP | ✅ Not exposed to internet |
+| Secrets | JCasC + K8s Secrets | ✅ No hardcoded |
+| IAM | IRSA per service | ✅ Least privilege |
+| Database | ClusterIP | ✅ Not exposed |
 
 ---
 
 ## 🧹 Cleanup
 
 ```bash
-# 1. ArgoCD apps
-kubectl delete applications --all -n argocd
-
-# 2. Monitoring
-helm uninstall monitoring -n monitoring
-
-# 3. ArgoCD
-kubectl delete -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# 4. EKS cluster (10-15 min)
-eksctl delete cluster --name cloud-native-cluster --region us-east-1
-
-# 5. ECR repos
-aws ecr delete-repository --repository-name frontend --region us-east-1 --force
-aws ecr delete-repository --repository-name backend --region us-east-1 --force
-
-# 6. Jenkins server
-cd Jenkins-Server-TF/ && terraform destroy -auto-approve
-
-# 7. Manual check: EC2, EBS, ELBs, CloudFormation, Elastic IPs
+bash destroy.sh
 ```
 
 ---
@@ -337,11 +278,12 @@ cd Jenkins-Server-TF/ && terraform destroy -auto-approve
 
 [![GitHub](https://img.shields.io/badge/GitHub-ibrahim--2010-black?style=for-the-badge&logo=github)](https://github.com/ibrahim-2010)
 [![Live App](https://img.shields.io/badge/Live_App-platinum--consults.com-green?style=for-the-badge)](http://platinum-consults.com)
+[![Grafana](https://img.shields.io/badge/Grafana-grafana.platinum--consults.com-orange?style=for-the-badge)](http://grafana.platinum-consults.com)
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+MIT License — see [LICENSE](LICENSE) for details.
 
 Happy Deploying! 🚀
