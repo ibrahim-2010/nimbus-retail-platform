@@ -1,16 +1,22 @@
 # Cloud-Native DevSecOps Three-Tier Application on AWS EKS 🚀
 
-[![LinkedIn](https://img.shields.io/badge/Connect%20with%20me%20on-LinkedIn-blue.svg)](https://www.linkedin.com/in/ibrahim)
+[![LinkedIn](https://img.shields.io/badge/Connect%20with%20me%20on-LinkedIn-blue.svg)](https://www.linkedin.com/in/ibrahim-jinadu-2388b73b8/)
 [![GitHub](https://img.shields.io/github/stars/ibrahim-2010/cloud-native-eks.svg?style=social)](https://github.com/ibrahim-2010)
 [![Live App](https://img.shields.io/badge/Live%20App-platinum--consults.com-green)](http://platinum-consults.com)
 [![Grafana](https://img.shields.io/badge/Grafana-grafana.platinum--consults.com-orange)](http://grafana.platinum-consults.com)
-
+ 
 [![AWS](https://img.shields.io/badge/AWS-%F0%9F%9B%A1-orange)](https://aws.amazon.com)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-%E2%9C%A8-blue)](https://kubernetes.io)
 [![Terraform](https://img.shields.io/badge/Terraform-%E2%9C%A8-lightgrey)](https://www.terraform.io)
 [![Jenkins](https://img.shields.io/badge/Jenkins-CI%2FCD-red)](https://www.jenkins.io)
 [![ArgoCD](https://img.shields.io/badge/ArgoCD-GitOps-orange)](https://argoproj.github.io/cd)
 [![Docker](https://img.shields.io/badge/Docker-%F0%9F%90%B3-blue)](https://www.docker.com)
+
+---
+
+### 🌐 Live Deployment
+
+![Cloud Native Task Manager](assets/app-live.png)
 
 ---
 
@@ -32,6 +38,8 @@ This repository hosts the implementation of a **Three-Tier Web App** using **Rea
 - **ExternalDNS** auto-creates Route 53 records from Ingress annotations
 - **Bootstrap + Destroy scripts** for full lifecycle management
 
+---
+
 🚢 **The deployment covers:**
 
 1. **Bootstrap** — S3, DynamoDB, ECR, key pair (one idempotent script)
@@ -46,6 +54,28 @@ This repository hosts the implementation of a **Three-Tier Web App** using **Rea
 ## 🏗️ Architecture
 
 ![Architecture Diagram](assets/architecture.png)
+
+---
+
+## 📸 Deployment Evidence
+
+### Jenkins CI/CD Pipelines — 9 Stages Green
+![Backend Pipeline](assets/jenkins-pipelines-backend.png)
+![Frontend Pipeline](assets/jenkins-pipelines-frontend.png)
+
+### ArgoCD — All Apps Synced & Healthy
+![ArgoCD](assets/argocd-dashboard.png)
+
+### SonarQube — Quality Gate Passed
+![SonarQube](assets/sonarqube-quality-gate.png)
+
+### Grafana — Three-Tier Namespace Monitoring
+![Grafana](assets/grafana-dashboard.png)
+
+### Route 53 — DNS Records Auto-Created by ExternalDNS
+![Route53](assets/route53-records.png)
+
+---
 
 **CI/CD Flow:**
 ```
@@ -132,6 +162,15 @@ cloud-native-eks/
 ├── 📂 argocd/
 │   ├── app-of-apps.yaml                # ⭐ Root app (one kubectl apply)
 │   └── 📂 apps/                       # Child apps auto-created
+├── 📂 assets/
+│   ├── architecture.png                # Architecture diagram
+│   ├── app-live.png                    # Live app screenshot
+│   ├── argocd-dashboard.png            # ArgoCD all apps synced
+│   ├── grafana-dashboard.png           # Grafana three-tier metrics
+│   ├── jenkins-pipelines-backend.png   # Backend pipeline 9 stages green
+│   ├── jenkins-pipelines-frontend.png  # Frontend pipeline 9 stages green
+│   ├── route53-records.png             # ExternalDNS auto-created records
+│   └── sonarqube-quality-gate.png      # Both projects passed
 ├── 📂 docs/
 │   ├── DEPLOYMENT-GUIDE.md
 │   └── ISSUES-REPORT.md
