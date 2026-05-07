@@ -17,7 +17,7 @@ resource "helm_release" "monitoring" {
   # Wait for CRDs to be installed before creating resources
   skip_crds       = false
   create_namespace = false
-  timeout          = 600
+  timeout          = 900
 
   values = [
     yamlencode({
