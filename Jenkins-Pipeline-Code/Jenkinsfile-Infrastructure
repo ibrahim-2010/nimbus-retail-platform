@@ -109,13 +109,14 @@ pipeline {
 import sys, json
 print(json.dumps({
     'JWT_SECRET':   sys.argv[1],
-    'DATABASE_URL': 'postgres://postgres:' + sys.argv[2] + '@' + sys.argv[3] + '/nimbus',
+    'DATABASE_URL': 'postgres://postgres:' + sys.argv[2] + '@' + sys.argv[3] + '/nimbus?sslmode=require',
     'REDIS_URL':    'redis://' + sys.argv[4] + ':6379'
 }))" "$JWT" "$DB_PASS" "$RDS_HOST" "$REDIS_HOST")
                             aws secretsmanager create-secret \
                                 --name nimbus-cluster/nimbus-secrets \
                                 --region us-east-1 \
                                 --secret-string "$SECRET_VAL"
+                            # Note: DATABASE_URL includes ?sslmode=require — RDS enforces SSL
                             echo "nimbus-secrets created"
                         fi
 
