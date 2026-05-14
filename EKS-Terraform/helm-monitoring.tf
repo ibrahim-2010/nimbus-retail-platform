@@ -50,6 +50,14 @@ resource "helm_release" "monitoring" {
         resources = {
           requests = { memory = "128Mi", cpu = "50m" }
         }
+        # Prevent the built-in Prometheus datasource from being marked isDefault=true.
+        # Only one datasource per org may be default — setting this false avoids
+        # the "only one datasource can be marked as default" provisioning error.
+        sidecar = {
+          datasources = {
+            isDefaultDatasource = false
+          }
+        }
         additionalDataSources = [
           {
             name      = "Loki"
