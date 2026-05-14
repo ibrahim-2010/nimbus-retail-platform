@@ -21,6 +21,7 @@ spec:
         type: persistent-claim
         size: 20Gi
         deleteClaim: false
+        class: gp3
   resources:
     requests:
       memory: 512Mi
