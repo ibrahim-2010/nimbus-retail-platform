@@ -21,6 +21,8 @@ env:
     value: "3003"
   - name: SERVICE_NAME
     value: "cart-service"
+  - name: NODE_TLS_REJECT_UNAUTHORIZED
+    value: "0"
 
 resources:
   requests:

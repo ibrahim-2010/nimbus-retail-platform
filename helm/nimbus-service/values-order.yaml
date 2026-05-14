@@ -21,6 +21,8 @@ env:
     value: "nimbus-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
   - name: CART_SERVICE_URL
     value: "http://cart-service:3003"
+  - name: NODE_TLS_REJECT_UNAUTHORIZED
+    value: "0"
 
 resources:
   requests:

@@ -23,6 +23,8 @@ env:
     value: "auth-service"
   - name: KAFKA_BROKERS
     value: "nimbus-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  - name: NODE_TLS_REJECT_UNAUTHORIZED
+    value: "0"
 
 resources:
   requests:
