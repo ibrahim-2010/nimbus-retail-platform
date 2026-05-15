@@ -1,6 +1,25 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: frontend-nginx-conf
+  namespace: nimbus
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      location /healthz {
+        return 200 'ok';
+        add_header Content-Type text/plain;
+      }
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: frontend-html
   namespace: nimbus
 data:
@@ -135,6 +154,8 @@ spec:
           volumeMounts:
             - name: html
               mountPath: /usr/share/nginx/html
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
           resources:
             requests:
               memory: "32Mi"
@@ -146,6 +167,9 @@ spec:
         - name: html
           configMap:
             name: frontend-html
+        - name: nginx-conf
+          configMap:
+            name: frontend-nginx-conf
 ---
 apiVersion: v1
 kind: Service
