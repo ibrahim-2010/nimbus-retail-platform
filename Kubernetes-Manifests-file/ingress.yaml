@@ -10,8 +10,6 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     alb.ingress.kubernetes.io/healthcheck-path: /nginx-health
     alb.ingress.kubernetes.io/tags: Project=cloud-native-eks
-    # ExternalDNS annotation — auto-creates Route 53 A record
-    external-dns.alpha.kubernetes.io/hostname: platinum-consults.com
 spec:
   rules:
     - host: platinum-consults.com
