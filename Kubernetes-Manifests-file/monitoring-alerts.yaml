@@ -1,44 +1,44 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: cloud-native-alerts
+  name: nimbus-alerts
   namespace: monitoring
   labels:
     release: monitoring
     app: kube-prometheus-stack
 spec:
   groups:
-    - name: cloud-native-application
+    - name: nimbus-application
       rules:
         # Alert: Pod replicas below desired count
         - alert: PodDown
           expr: >
-            kube_deployment_status_replicas_available{namespace="three-tier"}
-            < kube_deployment_spec_replicas{namespace="three-tier"}
+            kube_deployment_status_replicas_available{namespace="nimbus"}
+            < kube_deployment_spec_replicas{namespace="nimbus"}
           for: 1m
           labels:
             severity: critical
             team: devops
           annotations:
             summary: "Pod replica count below desired in {{ $labels.deployment }}"
-            description: "Deployment {{ $labels.deployment }} has {{ $value }} available replicas, expected {{ $labels.spec_replicas }}"
+            description: "Deployment {{ $labels.deployment }} has {{ $value }} available replicas"
 
-        # Alert: High CPU usage across application pods
+        # Alert: High CPU usage across nimbus pods
         - alert: HighCPUUsage
           expr: >
-            rate(container_cpu_usage_seconds_total{namespace="three-tier"}[5m]) > 0.8
+            rate(container_cpu_usage_seconds_total{namespace="nimbus"}[5m]) > 0.8
           for: 2m
           labels:
             severity: warning
             team: devops
           annotations:
-            summary: "High CPU usage detected in three-tier namespace"
+            summary: "High CPU usage in nimbus namespace"
             description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using excessive CPU"
 
         # Alert: Pod is crash-looping
         - alert: PodCrashLooping
           expr: >
-            rate(kube_pod_container_status_restarts_total{namespace="three-tier"}[15m]) > 0
+            rate(kube_pod_container_status_restarts_total{namespace="nimbus"}[15m]) > 0
           for: 5m
           labels:
             severity: critical
@@ -47,26 +47,27 @@ spec:
             summary: "Pod {{ $labels.pod }} is crash-looping"
             description: "Container {{ $labels.container }} in pod {{ $labels.pod }} has been restarting"
 
-        # Alert: PostgreSQL pod is down
-        - alert: PostgreSQLDown
+        # Alert: High request error rate across NimbusRetail services
+        - alert: HighErrorRate
           expr: >
-            kube_deployment_status_replicas_available{namespace="three-tier", deployment="postgres"} == 0
-          for: 30s
+            rate(http_requests_total{namespace="nimbus", status=~"5.."}[5m])
+            / rate(http_requests_total{namespace="nimbus"}[5m]) > 0.05
+          for: 2m
           labels:
             severity: critical
             team: devops
           annotations:
-            summary: "PostgreSQL database is DOWN"
-            description: "No PostgreSQL pods are available in the three-tier namespace"
+            summary: "High 5xx error rate on {{ $labels.job }}"
+            description: "More than 5% of requests to {{ $labels.job }} are returning 5xx errors"
 
-        # Alert: Redis pod is down
-        - alert: RedisDown
+        # Alert: Kafka consumer lag
+        - alert: KafkaConsumerLag
           expr: >
-            kube_deployment_status_replicas_available{namespace="three-tier", deployment="redis"} == 0
-          for: 30s
+            kafka_consumergroup_lag{namespace="kafka"} > 100
+          for: 5m
           labels:
-            severity: critical
+            severity: warning
             team: devops
           annotations:
-            summary: "Redis cache is DOWN"
-            description: "No Redis pods are available in the three-tier namespace"
+            summary: "Kafka consumer lag is high"
+            description: "Consumer group {{ $labels.consumergroup }} lag is {{ $value }} messages"

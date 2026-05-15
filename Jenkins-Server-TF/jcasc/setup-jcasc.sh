@@ -190,6 +190,25 @@ sudo wget -q -O /var/lib/jenkins/casc_configs/jenkins.yaml \
   || echo -e "${RED}  WARNING: Download failed — Jenkins will start with minimal 2-job config${NC}"
 sudo chown jenkins:jenkins /var/lib/jenkins/casc_configs/jenkins.yaml
 
+# ─── Configure jenkins user for direct SSH access ────────────────────────────
+# Allows: ssh -i test.pem jenkins@<IP>  (no sudo needed for kubectl/aws/helm)
+echo -e "${YELLOW}Configuring jenkins user for direct SSH access...${NC}"
+
+# Set login shell to bash (default is /bin/false for system accounts)
+sudo usermod -s /bin/bash jenkins
+
+# Copy SSH authorized_keys from ubuntu user so the same key works for jenkins
+sudo mkdir -p /var/lib/jenkins/.ssh
+sudo cp /home/ubuntu/.ssh/authorized_keys /var/lib/jenkins/.ssh/authorized_keys
+sudo chown -R jenkins:jenkins /var/lib/jenkins/.ssh
+sudo chmod 700 /var/lib/jenkins/.ssh
+sudo chmod 600 /var/lib/jenkins/.ssh/authorized_keys
+
+# Add jenkins to docker group (avoids sudo docker)
+sudo usermod -aG docker jenkins
+
+echo "  jenkins user SSH configured — use: ssh -i test.pem jenkins@${PUBLIC_IP}"
+
 # ─── Restart Jenkins ─────────────────────────────────────────────────────────
 echo -e "${YELLOW}Restarting Jenkins...${NC}"
 sudo systemctl daemon-reload
@@ -223,8 +242,13 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
   echo "  ✅ 6 credentials (github-creds, github-token, ACCOUNT_ID, ECR repos, sonar)"
   echo "  ✅ SonarQube server (via Groovy init script)"
   echo "  ✅ SonarQube webhook (http://${PRIVATE_IP}:8080/sonarqube-webhook/)"
-  echo "  ✅ 8 pipeline jobs (three-tier-backend, three-tier-frontend, 5x nimbus-*-service, nimbus-infrastructure)"
+  echo "  ✅ 6 pipeline jobs (nimbus-infrastructure, 5x nimbus-*-service)"
   echo "  ✅ AWS CLI configured (instance role or explicit credentials)"
+  echo "  ✅ jenkins user shell set to bash — direct SSH enabled"
+  echo "  ✅ jenkins user added to docker group — no sudo docker needed"
+  echo ""
+  echo "Future SSH logins (no sudo needed):"
+  echo "  ssh -i test.pem jenkins@${PUBLIC_IP}"
   echo ""
   echo "Verify AWS: aws sts get-caller-identity"
 else

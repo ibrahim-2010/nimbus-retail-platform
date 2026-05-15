@@ -85,18 +85,9 @@ else
 fi
 
 # ─── [3/6] ECR Repositories ──────────────────────────────────────────────────
-echo -e "${YELLOW}[3/6] Creating ECR repositories (legacy three-tier)...${NC}"
-echo "  NOTE: Nimbus ECR repos (nimbus/*) are created by EKS-Terraform/ecr.tf"
-for REPO in frontend backend; do
-  if aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" 2>/dev/null | grep -q "$REPO"; then
-    echo "  ECR repo '$REPO' already exists — skipping"
-  else
-    aws ecr create-repository --repository-name "$REPO" \
-      --image-scanning-configuration scanOnPush=true \
-      --region "$REGION" > /dev/null
-    echo "  Created: $REPO (image scanning enabled)"
-  fi
-done
+echo -e "${YELLOW}[3/6] ECR repositories...${NC}"
+echo "  Nimbus ECR repos (nimbus/auth-service etc.) are created by EKS-Terraform/ecr.tf"
+echo "  Nothing to create here — skipping"
 
 # ─── [4/6] EC2 Key Pair ──────────────────────────────────────────────────────
 echo -e "${YELLOW}[4/6] Creating EC2 key pair...${NC}"
@@ -158,7 +149,6 @@ echo ""
 echo "Resources ready:"
 echo "  S3 Bucket:       $S3_BUCKET  (versioned, encrypted, public-access-blocked)"
 echo "  DynamoDB Table:  $DYNAMO_TABLE"
-echo "  ECR Repos:       frontend, backend  (three-tier legacy)"
 echo "  Key Pair:        $KEY_NAME  → ${KEY_NAME}.pem"
 echo "  Account ID:      $ACCOUNT_ID"
 echo ""
@@ -177,7 +167,7 @@ echo "     terraform apply"
 echo ""
 echo "  3. Configure Jenkins (SSH into Jenkins EC2 after boot completes ~5 min):"
 echo "     sudo tail -f /var/log/tools-install.log   # wait for 'Installation Complete'"
-echo "     sudo bash /opt/setup-jcasc.sh             # injects credentials, creates 8 jobs"
+echo "     sudo bash /opt/setup-jcasc.sh             # injects credentials, creates 6 jobs"
 echo ""
 echo "  4. Trigger the infrastructure pipeline in Jenkins UI:"
 echo "     http://<jenkins-ip>:8080  →  nimbus-infrastructure  →  Build Now"

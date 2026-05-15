@@ -58,19 +58,6 @@ credentials:
               description: "AWS Account ID"
               secret: "${AWS_ACCOUNT_ID}"
 
-          # ECR Repo names
-          - string:
-              scope: GLOBAL
-              id: "ECR_REPO1"
-              description: "Frontend ECR repository name"
-              secret: "frontend"
-
-          - string:
-              scope: GLOBAL
-              id: "ECR_REPO2"
-              description: "Backend ECR repository name"
-              secret: "backend"
-
           # SonarQube token
           - string:
               scope: GLOBAL
@@ -96,44 +83,6 @@ unclassified:
 #  Pipeline Job Definitions
 # ──────────────────────────────────────────────
 jobs:
-  - script: >
-      pipelineJob('three-tier-backend') {
-        description('Backend CI/CD Pipeline — SonarQube + Trivy + ECR + GitOps')
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
-                  credentials('github-creds')
-                }
-                branches('*/main')
-              }
-            }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Backend')
-          }
-        }
-      }
-
-  - script: >
-      pipelineJob('three-tier-frontend') {
-        description('Frontend CI/CD Pipeline — SonarQube + Trivy + ECR + GitOps')
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
-                  credentials('github-creds')
-                }
-                branches('*/main')
-              }
-            }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Frontend')
-          }
-        }
-      }
-
   # ── Nimbus service pipelines (all share one Jenkinsfile, default SERVICE_NAME differs) ──
 
   - script: >

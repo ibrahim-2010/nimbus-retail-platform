@@ -204,19 +204,24 @@ kubectl patch namespace kafka -p '{"metadata":{"finalizers":null}}' --type=merge
 kubectl delete namespace kafka --timeout=30s 2>/dev/null || echo "  kafka namespace already gone"
 
 # ──────────────────────────────────────────────
-#  Phase 6: Nimbus Application Namespace
+#  Phase 6: Application Namespaces
 # ──────────────────────────────────────────────
-echo -e "${YELLOW}[6/${TOTAL_PHASES}] Removing Nimbus application resources...${NC}"
+echo -e "${YELLOW}[6/${TOTAL_PHASES}] Removing application resources...${NC}"
 
-for ns in nimbus nimbus-prod; do
-  kubectl delete ingress --all -n "$ns" 2>/dev/null || true
-done
-kubectl delete ingress --all -n monitoring 2>/dev/null || true
+# Delete ALL ingresses across every namespace first — this signals the ALB
+# controller to deregister targets and delete ALBs before we wait below.
+echo "  Deleting all ingresses (triggers ALB controller cleanup)..."
+kubectl delete ingress --all -n nimbus      2>/dev/null || true
+kubectl delete ingress --all -n monitoring  2>/dev/null || true
+kubectl delete ingress --all -n three-tier  2>/dev/null || true
+kubectl delete ingress --all -n argocd      2>/dev/null || true
+# Catch any remaining ingresses in other namespaces
+kubectl delete ingress -A --all            2>/dev/null || true
 
-echo "  Waiting 60s for ALB deregistration..."
-sleep 60
+echo "  Waiting 90s for ALB/NLB deregistration..."
+sleep 90
 
-for ns in nimbus nimbus-prod; do
+for ns in nimbus nimbus-prod three-tier; do
   kubectl delete all     --all -n "$ns" 2>/dev/null || true
   kubectl delete pvc     --all -n "$ns" 2>/dev/null || true
   kubectl delete secrets --all -n "$ns" 2>/dev/null || true
@@ -246,10 +251,18 @@ if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
 
   for ALB_ARN in $(aws elbv2 describe-load-balancers --region "$REGION" \
     --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" --output text 2>/dev/null); do
-    echo "  Deleting ALB: $ALB_ARN"
+    echo "  Deleting ALB/NLB: $ALB_ARN"
     aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" --region "$REGION" 2>/dev/null || true
   done
   sleep 30
+
+  # Delete orphan target groups — ALB deletion does not always remove them
+  echo "  Cleaning orphan target groups..."
+  for TG_ARN in $(aws elbv2 describe-target-groups --region "$REGION" \
+    --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" --output text 2>/dev/null); do
+    echo "    Deleting target group: $TG_ARN"
+    aws elbv2 delete-target-group --target-group-arn "$TG_ARN" --region "$REGION" 2>/dev/null || true
+  done
 
   for ENI_ID in $(aws ec2 describe-network-interfaces \
     --filters "Name=vpc-id,Values=$VPC_ID" \
@@ -293,7 +306,6 @@ if [ -n "$EKS_DIR" ]; then
   terraform state rm kubernetes_namespace.monitoring   2>/dev/null || true
   terraform state rm kubernetes_namespace.argocd       2>/dev/null || true
   terraform state rm kubernetes_namespace.kafka        2>/dev/null || true
-  terraform state rm kubernetes_namespace.three_tier   2>/dev/null || true
   terraform state rm helm_release.monitoring           2>/dev/null || true
   terraform state rm helm_release.loki                 2>/dev/null || true
   terraform state rm helm_release.tempo                2>/dev/null || true

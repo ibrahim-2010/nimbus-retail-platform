@@ -27,17 +27,6 @@ provider "helm" {
   }
 }
 
-resource "kubernetes_namespace" "three_tier" {
-  metadata {
-    name = "three-tier"
-    labels = {
-      project = "cloud-native-eks"
-    }
-  }
-
-  depends_on = [aws_eks_node_group.main]
-}
-
 resource "kubernetes_namespace" "monitoring" {
   metadata {
     name = "monitoring"
