@@ -10,9 +10,11 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/tags: Project=nimbus-retail
+    external-dns.alpha.kubernetes.io/hostname: platinum-consults.com
 spec:
   rules:
-    - http:
+    - host: platinum-consults.com
+      http:
         paths:
           - path: /auth
             pathType: Prefix
