@@ -28,7 +28,7 @@ NC='\033[0m'
 CLUSTER_NAME="nimbus-cluster"
 REGION="us-east-1"
 DOMAIN="platinum-consults.com"
-TOTAL_PHASES=11
+TOTAL_PHASES=12
 
 echo -e "${RED}"
 echo "╔══════════════════════════════════════════════════╗"
@@ -324,6 +324,114 @@ if [ -n "$EKS_DIR" ]; then
 else
   echo "  EKS-Terraform directory not found — skipping"
 fi
+
+# ──────────────────────────────────────────────
+#  Phase 9b: AWS CLI Fallback — delete any core
+#  resources Terraform failed to remove.
+# ──────────────────────────────────────────────
+echo -e "${YELLOW}[9b] AWS CLI fallback cleanup (catches Terraform failures)...${NC}"
+
+# EKS node groups + cluster
+for CLUSTER in $(aws eks list-clusters --region "$REGION" \
+    --query "clusters" --output text 2>/dev/null); do
+  for NG in $(aws eks list-nodegroups --cluster-name "$CLUSTER" \
+      --region "$REGION" --query "nodegroups" --output text 2>/dev/null); do
+    echo "  Deleting node group: $NG"
+    aws eks delete-nodegroup --cluster-name "$CLUSTER" \
+      --nodegroup-name "$NG" --region "$REGION" 2>/dev/null || true
+    aws eks wait nodegroup-deleted --cluster-name "$CLUSTER" \
+      --nodegroup-name "$NG" --region "$REGION" 2>/dev/null || true
+  done
+  echo "  Deleting EKS cluster: $CLUSTER"
+  aws eks delete-cluster --name "$CLUSTER" --region "$REGION" 2>/dev/null || true
+  aws eks wait cluster-deleted --name "$CLUSTER" --region "$REGION" 2>/dev/null || true
+done
+
+# RDS instances
+for DB in $(aws rds describe-db-instances --region "$REGION" \
+    --query "DBInstances[].DBInstanceIdentifier" --output text 2>/dev/null); do
+  echo "  Deleting RDS: $DB"
+  aws rds delete-db-instance --db-instance-identifier "$DB" \
+    --skip-final-snapshot --region "$REGION" 2>/dev/null || true
+done
+
+# ElastiCache clusters
+for CC in $(aws elasticache describe-cache-clusters --region "$REGION" \
+    --query "CacheClusters[].CacheClusterId" --output text 2>/dev/null); do
+  echo "  Deleting ElastiCache: $CC"
+  aws elasticache delete-cache-cluster --cache-cluster-id "$CC" \
+    --region "$REGION" 2>/dev/null || true
+done
+
+# Wait for RDS + ElastiCache to finish deleting before VPC cleanup
+echo "  Waiting for RDS and ElastiCache deletion (~5 min)..."
+sleep 60
+for DB in $(aws rds describe-db-instances --region "$REGION" \
+    --query "DBInstances[].DBInstanceIdentifier" --output text 2>/dev/null); do
+  aws rds wait db-instance-deleted --db-instance-identifier "$DB" \
+    --region "$REGION" 2>/dev/null || true
+done
+
+# Remaining EBS volumes
+for VOL in $(aws ec2 describe-volumes --region "$REGION" \
+    --filters "Name=status,Values=available" \
+    --query "Volumes[].VolumeId" --output text 2>/dev/null); do
+  echo "  Deleting EBS volume: $VOL"
+  aws ec2 delete-volume --volume-id "$VOL" --region "$REGION" 2>/dev/null || true
+done
+
+# NAT Gateways
+for NAT in $(aws ec2 describe-nat-gateways \
+    --filter "Name=state,Values=available,pending" --region "$REGION" \
+    --query "NatGateways[].NatGatewayId" --output text 2>/dev/null); do
+  echo "  Deleting NAT Gateway: $NAT"
+  aws ec2 delete-nat-gateway --nat-gateway-id "$NAT" --region "$REGION" 2>/dev/null || true
+done
+# Wait for NAT Gateways to delete before releasing EIPs
+echo "  Waiting for NAT Gateway deletion (~2 min)..."
+sleep 120
+
+# Elastic IPs
+for EIP in $(aws ec2 describe-addresses \
+    --query "Addresses[].AllocationId" --output text --region "$REGION" 2>/dev/null); do
+  echo "  Releasing EIP: $EIP"
+  aws ec2 release-address --allocation-id "$EIP" --region "$REGION" 2>/dev/null || true
+done
+
+# VPC cleanup (non-default VPCs only)
+for VPC in $(aws ec2 describe-vpcs --region "$REGION" \
+    --filters "Name=isDefault,Values=false" \
+    --query "Vpcs[].VpcId" --output text 2>/dev/null); do
+  echo "  Cleaning VPC: $VPC"
+  for SUBNET in $(aws ec2 describe-subnets \
+      --filters "Name=vpc-id,Values=$VPC" \
+      --query "Subnets[].SubnetId" --output text --region "$REGION" 2>/dev/null); do
+    aws ec2 delete-subnet --subnet-id "$SUBNET" --region "$REGION" 2>/dev/null || true
+  done
+  for RT in $(aws ec2 describe-route-tables \
+      --filters "Name=vpc-id,Values=$VPC" \
+      --query "RouteTables[?Associations[?Main==\`false\`]].RouteTableId" \
+      --output text --region "$REGION" 2>/dev/null); do
+    aws ec2 delete-route-table --route-table-id "$RT" --region "$REGION" 2>/dev/null || true
+  done
+  for IGW in $(aws ec2 describe-internet-gateways \
+      --filters "Name=attachment.vpc-id,Values=$VPC" \
+      --query "InternetGateways[].InternetGatewayId" \
+      --output text --region "$REGION" 2>/dev/null); do
+    aws ec2 detach-internet-gateway --internet-gateway-id "$IGW" \
+      --vpc-id "$VPC" --region "$REGION" 2>/dev/null || true
+    aws ec2 delete-internet-gateway --internet-gateway-id "$IGW" \
+      --region "$REGION" 2>/dev/null || true
+  done
+  for SG in $(aws ec2 describe-security-groups \
+      --filters "Name=vpc-id,Values=$VPC" \
+      --query "SecurityGroups[?GroupName!='default'].GroupId" \
+      --output text --region "$REGION" 2>/dev/null); do
+    aws ec2 delete-security-group --group-id "$SG" --region "$REGION" 2>/dev/null || true
+  done
+  aws ec2 delete-vpc --vpc-id "$VPC" --region "$REGION" 2>/dev/null \
+    && echo "  Deleted VPC: $VPC" || echo "  VPC $VPC still has dependencies — check manually"
+done
 
 # ──────────────────────────────────────────────
 #  Phase 10: ECR Repositories
