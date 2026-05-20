@@ -65,7 +65,7 @@ resource "aws_iam_policy" "alb_controller" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -91,7 +91,7 @@ resource "aws_iam_role" "alb_controller" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 

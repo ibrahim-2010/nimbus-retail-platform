@@ -31,7 +31,7 @@ resource "aws_iam_role" "ebs_csi_driver" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -47,7 +47,7 @@ resource "aws_eks_addon" "ebs_csi" {
   service_account_role_arn = aws_iam_role.ebs_csi_driver.arn
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 
   depends_on = [aws_eks_node_group.main]

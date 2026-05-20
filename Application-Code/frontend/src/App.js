@@ -192,7 +192,7 @@ function App() {
       </div>
 
       <footer className="footer">
-        <p>Cloud-Native EKS Project &middot; Ibrahim &middot; DevOps Portfolio</p>
+        <p>Nimbus Retail Platform &middot; Ibrahim &middot; DevOps Portfolio</p>
         <p className="tech-stack">
           React &middot; Node.js &middot; PostgreSQL &middot; Redis &middot; Kubernetes &middot; Jenkins &middot; ArgoCD
         </p>

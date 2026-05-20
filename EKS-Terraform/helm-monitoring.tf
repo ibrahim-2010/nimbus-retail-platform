@@ -10,7 +10,26 @@
 #    - Grafana ClusterIP (ALB Ingress handles external access)
 #    - Reduced resource requests (fits on t3.xlarge nodes)
 #    - Depends on ALB controller being ready
+#    - Grafana admin password generated + stored in Secrets Manager
 # ──────────────────────────────────────────────
+
+# ── Grafana admin password ────────────────────
+resource "random_password" "grafana" {
+  length  = 24
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "grafana_password" {
+  name                    = "${var.cluster_name}/grafana/admin-password"
+  recovery_window_in_days = 0
+
+  tags = { Project = "nimbus-retail-platform" }
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_password" {
+  secret_id     = aws_secretsmanager_secret.grafana_password.id
+  secret_string = random_password.grafana.result
+}
 
 resource "helm_release" "monitoring" {
   name             = "monitoring"
@@ -46,7 +65,7 @@ resource "helm_release" "monitoring" {
       }
       grafana = {
         service       = { type = "ClusterIP" }
-        adminPassword = "CloudNative2026!"
+        adminPassword = random_password.grafana.result
         resources = {
           requests = { memory = "128Mi", cpu = "50m" }
         }

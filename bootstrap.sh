@@ -9,7 +9,7 @@ set -euo pipefail
 #  Creates:
 #    1. S3 bucket (versioned + encrypted + public-access-blocked) — Terraform state
 #    2. DynamoDB table — Terraform state locking
-#    3. ECR repos (frontend, backend) — three-tier legacy; Nimbus repos via Terraform
+#    3. ECR repos — created by EKS-Terraform/ecr.tf (not here)
 #    4. EC2 key pair — Jenkins SSH access
 #    5. AWS identity verification
 #    6. Orphan Jenkins IAM/SG cleanup (from previous deployments)
@@ -112,25 +112,25 @@ echo "  Region:  $REGION"
 # ─── [6/6] Clean Orphan Jenkins Resources ────────────────────────────────────
 echo -e "${YELLOW}[6/6] Cleaning orphan Jenkins resources from previous deployments...${NC}"
 aws iam remove-role-from-instance-profile \
-  --instance-profile-name jenkins-cloud-native-profile \
-  --role-name jenkins-cloud-native-role 2>/dev/null && echo "  Removed role from profile" || true
+  --instance-profile-name jenkins-nimbus-profile \
+  --role-name jenkins-nimbus-role 2>/dev/null && echo "  Removed role from profile" || true
 aws iam delete-instance-profile \
-  --instance-profile-name jenkins-cloud-native-profile 2>/dev/null && echo "  Deleted instance profile" || true
+  --instance-profile-name jenkins-nimbus-profile 2>/dev/null && echo "  Deleted instance profile" || true
 for ARN in $(aws iam list-attached-role-policies \
-    --role-name jenkins-cloud-native-role \
+    --role-name jenkins-nimbus-role \
     --query "AttachedPolicies[].PolicyArn" \
     --output text 2>/dev/null); do
-  aws iam detach-role-policy --role-name jenkins-cloud-native-role --policy-arn "$ARN" 2>/dev/null || true
+  aws iam detach-role-policy --role-name jenkins-nimbus-role --policy-arn "$ARN" 2>/dev/null || true
 done
 for NAME in $(aws iam list-role-policies \
-    --role-name jenkins-cloud-native-role \
+    --role-name jenkins-nimbus-role \
     --query "PolicyNames[]" \
     --output text 2>/dev/null); do
-  aws iam delete-role-policy --role-name jenkins-cloud-native-role --policy-name "$NAME" 2>/dev/null || true
+  aws iam delete-role-policy --role-name jenkins-nimbus-role --policy-name "$NAME" 2>/dev/null || true
 done
-aws iam delete-role --role-name jenkins-cloud-native-role 2>/dev/null && echo "  Deleted IAM role" || true
+aws iam delete-role --role-name jenkins-nimbus-role 2>/dev/null && echo "  Deleted IAM role" || true
 SG_ID=$(aws ec2 describe-security-groups \
-  --filters "Name=group-name,Values=jenkins-cloud-native-sg" \
+  --filters "Name=group-name,Values=jenkins-nimbus-sg" \
   --query "SecurityGroups[0].GroupId" \
   --output text --region "$REGION" 2>/dev/null || echo "")
 if [ -n "$SG_ID" ] && [ "$SG_ID" != "None" ]; then

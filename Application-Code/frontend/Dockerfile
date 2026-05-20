@@ -11,7 +11,7 @@ RUN npm run build
 # Stage 2: Serve with nginx (final image ~25MB)
 FROM nginx:1.25-alpine
 LABEL maintainer="Ibrahim"
-LABEL project="cloud-native-eks"
+LABEL project="nimbus-retail-platform"
 
 COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

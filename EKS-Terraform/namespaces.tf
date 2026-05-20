@@ -31,7 +31,7 @@ resource "kubernetes_namespace" "monitoring" {
   metadata {
     name = "monitoring"
     labels = {
-      project = "cloud-native-eks"
+      project = "nimbus-retail-platform"
     }
   }
 
@@ -42,7 +42,7 @@ resource "kubernetes_namespace" "argocd" {
   metadata {
     name = "argocd"
     labels = {
-      project = "cloud-native-eks"
+      project = "nimbus-retail-platform"
     }
   }
 
@@ -53,7 +53,7 @@ resource "kubernetes_namespace" "nimbus" {
   metadata {
     name = "nimbus"
     labels = {
-      project = "cloud-native-eks"
+      project = "nimbus-retail-platform"
     }
   }
 

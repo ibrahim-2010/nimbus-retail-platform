@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
-  default     = "cloud-native-cluster"
+  default     = "nimbus-cluster"
 }
 
 variable "cluster_version" {

@@ -16,7 +16,7 @@ resource "aws_route53_zone" "main" {
   name = var.domain_name
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -50,7 +50,7 @@ resource "aws_iam_policy" "external_dns" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -76,7 +76,7 @@ resource "aws_iam_role" "external_dns" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 

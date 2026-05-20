@@ -39,7 +39,7 @@ kubectl get pods -n nimbus
 **Option A — ArgoCD (recommended):** revert the image tag commit in the platform repo.
 
 ```bash
-cd cloud-native-eks-project
+cd nimbus-retail-platform
 git log --oneline helm/nimbus-service/values-auth.yaml   # find the previous good commit
 git revert HEAD                                          # or revert the specific commit
 git push origin main
@@ -218,7 +218,7 @@ kubectl port-forward svc/monitoring-kube-prometheus-prometheus -n monitoring 909
 
 ```bash
 # 1. Bootstrap S3 + DynamoDB (if first time)
-cd cloud-native-eks-project
+cd nimbus-retail-platform
 bash bootstrap.sh
 
 # 2. Jenkins server
@@ -261,7 +261,7 @@ kubectl apply -f argocd/app-of-apps.yaml
 ## 10. Tear Down the Stack
 
 ```bash
-cd cloud-native-eks-project
+cd nimbus-retail-platform
 bash destroy.sh
 ```
 

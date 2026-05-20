@@ -76,3 +76,8 @@ output "eso_role_arn" {
   description = "IAM role ARN for External Secrets Operator (annotate ESO service account)"
   value       = aws_iam_role.eso.arn
 }
+
+output "grafana_password_secret_arn" {
+  description = "Secrets Manager ARN holding the Grafana admin password"
+  value       = aws_secretsmanager_secret.grafana_password.arn
+}

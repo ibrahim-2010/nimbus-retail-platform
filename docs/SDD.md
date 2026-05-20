@@ -154,7 +154,7 @@ flowchart TB
 | Repo | Contents | Audience |
 |---|---|---|
 | `nimbus-retail-starter` | 5 service source trees, docker-compose | Developers |
-| `cloud-native-eks` | Terraform, Helm chart, ArgoCD apps, pipelines | Platform team |
+| `nimbus-retail-platform` | Terraform, Helm chart, ArgoCD apps, pipelines | Platform team |
 
 ### 4.2 CI Pipeline (Jenkins)
 

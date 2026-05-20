@@ -668,30 +668,31 @@ fi
 # Orphan Jenkins IAM resources
 echo "  Cleaning orphan Jenkins IAM resources..."
 aws iam remove-role-from-instance-profile \
-  --instance-profile-name jenkins-cloud-native-profile \
-  --role-name jenkins-cloud-native-role 2>/dev/null || true
+  --instance-profile-name jenkins-nimbus-profile \
+  --role-name jenkins-nimbus-role 2>/dev/null || true
 aws iam delete-instance-profile \
-  --instance-profile-name jenkins-cloud-native-profile 2>/dev/null || true
+  --instance-profile-name jenkins-nimbus-profile 2>/dev/null || true
 for ARN in $(aws iam list-attached-role-policies \
-    --role-name jenkins-cloud-native-role \
+    --role-name jenkins-nimbus-role \
     --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null); do
   aws iam detach-role-policy \
-    --role-name jenkins-cloud-native-role --policy-arn "$ARN" 2>/dev/null || true
+    --role-name jenkins-nimbus-role --policy-arn "$ARN" 2>/dev/null || true
 done
 for NAME in $(aws iam list-role-policies \
-    --role-name jenkins-cloud-native-role \
+    --role-name jenkins-nimbus-role \
     --query "PolicyNames[]" --output text 2>/dev/null); do
   aws iam delete-role-policy \
-    --role-name jenkins-cloud-native-role --policy-name "$NAME" 2>/dev/null || true
+    --role-name jenkins-nimbus-role --policy-name "$NAME" 2>/dev/null || true
 done
-aws iam delete-role --role-name jenkins-cloud-native-role 2>/dev/null || true
+aws iam delete-role --role-name jenkins-nimbus-role 2>/dev/null || true
 
 # Delete Secrets Manager secrets
 echo "  Deleting Secrets Manager secrets..."
 for secret in \
     "nimbus-cluster/nimbus-secrets" \
     "nimbus-cluster/nimbus-catalog-secrets" \
-    "${CLUSTER_NAME}/rds/master-password"; do
+    "${CLUSTER_NAME}/rds/master-password" \
+    "${CLUSTER_NAME}/grafana/admin-password"; do
   aws secretsmanager delete-secret --secret-id "$secret" \
     --force-delete-without-recovery --region "$REGION" 2>/dev/null \
     && echo "  Deleted: $secret" || echo "  $secret not found"

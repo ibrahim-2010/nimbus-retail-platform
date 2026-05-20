@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════
-#  Cloud-Native EKS — Full Infrastructure as Code
+#  Nimbus Retail Platform — Full Infrastructure as Code
 #  Creates: VPC, Subnets, NAT Gateway, EKS Cluster, Node Group,
 #           OIDC Provider, EBS CSI Driver, ALB Controller IAM
 # ══════════════════════════════════════════════════════════════
@@ -21,7 +21,7 @@ resource "aws_vpc" "main" {
 
   tags = {
     Name    = "${var.cluster_name}-vpc"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -34,7 +34,7 @@ resource "aws_internet_gateway" "main" {
 
   tags = {
     Name    = "${var.cluster_name}-igw"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -51,7 +51,7 @@ resource "aws_subnet" "public" {
 
   tags = {
     Name                                        = "${var.cluster_name}-public-${var.availability_zones[count.index]}"
-    Project                                     = "cloud-native-eks"
+    Project                                     = "nimbus-retail-platform"
     "kubernetes.io/role/elb"                    = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
@@ -67,7 +67,7 @@ resource "aws_route_table" "public" {
 
   tags = {
     Name    = "${var.cluster_name}-public-rt"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -86,7 +86,7 @@ resource "aws_eip" "nat" {
 
   tags = {
     Name    = "${var.cluster_name}-nat-eip"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -96,7 +96,7 @@ resource "aws_nat_gateway" "main" {
 
   tags = {
     Name    = "${var.cluster_name}-nat-gw"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -114,7 +114,7 @@ resource "aws_subnet" "private" {
 
   tags = {
     Name                                        = "${var.cluster_name}-private-${var.availability_zones[count.index]}"
-    Project                                     = "cloud-native-eks"
+    Project                                     = "nimbus-retail-platform"
     "kubernetes.io/role/internal-elb"           = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
@@ -130,7 +130,7 @@ resource "aws_route_table" "private" {
 
   tags = {
     Name    = "${var.cluster_name}-private-rt"
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -159,7 +159,7 @@ resource "aws_iam_role" "eks_cluster" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -189,7 +189,7 @@ resource "aws_eks_cluster" "main" {
   }
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 
   depends_on = [
@@ -212,7 +212,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -235,7 +235,7 @@ resource "aws_iam_role" "eks_nodes" {
   })
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -278,7 +278,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   tags = {
-    Project = "cloud-native-eks"
+    Project = "nimbus-retail-platform"
   }
 
   depends_on = [

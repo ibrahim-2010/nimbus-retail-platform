@@ -1,7 +1,7 @@
 FROM node:18-alpine
 
 LABEL maintainer="Ibrahim"
-LABEL project="cloud-native-eks"
+LABEL project="nimbus-retail-platform"
 
 WORKDIR /app
 

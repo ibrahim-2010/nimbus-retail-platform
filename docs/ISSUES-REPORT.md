@@ -1,468 +1,365 @@
-# Cloud-Native EKS Project — Issues, Challenges & Solutions Report
+# NimbusRetail EKS Deployment — Issues, Challenges & Solutions Report
 
-> Documented across four full deployment cycles. Every issue below was encountered and resolved during the actual build — not hypothetical scenarios.
-
----
-
-## Executive Summary
-
-This report documents every issue encountered during four complete deployment cycles of a cloud-native three-tier application on AWS EKS. A total of **17 distinct issues** were encountered and resolved across IAM permissions, CI/CD pipeline configuration, Kubernetes scheduling, GitOps workflows, Jenkins automation, and monitoring setup.
-
-### Issue Distribution by Category
-
-| Category | Count | Issues |
-|----------|-------|--------|
-| IAM & Permissions | 4 | #1, #2, #7, #11 |
-| CI/CD Pipeline | 3 | #3, #8, #9 |
-| Kubernetes & Scheduling | 3 | #6, #12, #13 |
-| GitOps & ArgoCD | 2 | #4, #5 |
-| Jenkins Automation (JCasC) | 3 | #14, #15, #16 |
-| Monitoring | 2 | #10, #17 |
-
-### Issue Distribution by Severity
-
-| Severity | Count | Issues |
-|----------|-------|--------|
-| Critical — Blocks deployment entirely | 7 | #1, #5, #6, #11, #12, #14, #15 |
-| High — Feature broken, workaround needed | 6 | #2, #3, #8, #9, #10, #16 |
-| Medium — Inconvenience, non-blocking | 4 | #4, #7, #13, #17 |
-
-### Issue Distribution by Deployment Cycle
-
-| Deployment | Issues Encountered | New Issues |
-|-----------|-------------------|------------|
-| Deployment 1 (t3.small, manual) | #1-#10 | 10 |
-| Deployment 2 (t3.xlarge, manual) | #1, #2, #11, #12, #13 | 3 |
-| Deployment 3 (JCasC + Terraform EKS) | #14, #15 | 2 |
-| Deployment 4 (Full automation) | #16, #17 | 2 |
+**Project:** NimbusRetail Cloud-Native Microservices Platform  
+**Stack:** AWS EKS 1.31 · Terraform · Helm · ArgoCD · Jenkins · Strimzi Kafka · ESO · Kyverno  
+**Date:** May 2026  
 
 ---
 
-## Issue #1: EKS Cluster Creation Denied — DescribeClusterVersions
+## Issue 1 — Only 2 Jenkins Jobs Instead of 8
 
-**Category:** IAM & Permissions | **Severity:** Critical | **Deployments:** 1, 2, 3, 4
+**Symptom:**  
+After running `setup-jcasc.sh`, Jenkins showed only 2 jobs (`three-tier-backend`, `three-tier-frontend`) instead of the expected 8.
 
-**Error Message:**
+**Root Cause:**  
+`tools-install.sh` writes a minimal 2-job JCasC config during EC2 provisioning. `setup-jcasc.sh` never replaced it with the full 8-job config from the GitHub repo.
+
+**Fix:**  
+Added a `wget` step inside `setup-jcasc.sh` to download the full `jenkins.yaml` from GitHub before restarting Jenkins:
+
+```bash
+sudo wget -q -O /var/lib/jenkins/casc_configs/jenkins.yaml \
+  "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/jenkins.yaml"
+sudo chown jenkins:jenkins /var/lib/jenkins/casc_configs/jenkins.yaml
 ```
-User: arn:aws:sts::022374769206:assumed-role/jenkins-cloud-native-role/... 
-is not authorized to perform: eks:DescribeClusterVersions
+
+**Files Changed:** `Jenkins-Server-TF/jcasc/setup-jcasc.sh`
+
+---
+
+## Issue 2 — Kubernetes Provider Connecting to localhost:80
+
+**Symptom:**  
+Terraform Apply failed with `connection refused` — the Kubernetes/Helm provider was connecting to `localhost:80` instead of the EKS cluster endpoint.
+
+**Root Cause:**  
+Terraform evaluates provider configuration before resources exist. `aws_eks_cluster.main.endpoint` is empty until the cluster is created, so the provider defaulted to `localhost`.
+
+**Fix:**  
+Split Terraform apply into two stages in `Jenkinsfile-Infrastructure`:
+
+- **Stage 1:** Deploy only EKS cluster + node group via `-target`
+- **Stage 2:** Full apply once EKS endpoint is resolvable
+
+```groovy
+sh 'terraform apply -target=aws_eks_cluster.main -target=aws_eks_node_group.main -auto-approve'
+// then
+sh 'terraform apply -auto-approve'
 ```
 
-**Root Cause:** The Terraform-provisioned IAM role attached standard AWS managed policies (AmazonEKSClusterPolicy, AmazonEKSWorkerNodePolicy, etc.) but these managed policies do not include the newer `eks:DescribeClusterVersions` API action. The `AmazonEKSFullAccess` managed policy does not exist.
+**Files Changed:** `Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure`
 
-**Investigation:** Attempted to attach `AmazonEKSFullAccess` — received "Policy does not exist." Confirmed the managed policy name doesn't exist in AWS IAM.
+---
 
-**Solution:** Added an inline IAM policy in Terraform `main.tf`:
+## Issue 3 — AccessDenied for RDS and ElastiCache
+
+**Symptom:**  
+Infrastructure pipeline failed with `elasticache:CreateCacheSubnetGroup` and `rds:CreateDBSubnetGroup` AccessDenied errors.
+
+**Root Cause:**  
+Jenkins IAM role had no RDS or ElastiCache permissions. The AWS managed policy limit (10 policies per role) was already reached, so attaching new managed policies was blocked.
+
+**Fix:**  
+Added an inline policy (bypasses the 10-policy limit) to the Jenkins IAM role in Terraform:
+
 ```hcl
-resource "aws_iam_role_policy" "eks_full_access" {
-  name = "EKSFullAccess"
+resource "aws_iam_role_policy" "nimbus_infra_access" {
+  name = "NimbusInfraAccess"
   role = aws_iam_role.jenkins_role.name
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "eks:*"
-      Resource = "*"
-    }]
+    Statement = [{ Effect = "Allow", Action = ["rds:*", "elasticache:*"], Resource = "*" }]
   })
 }
 ```
 
-**Prevention:** The inline policy is now part of the Terraform code — created automatically with every deployment.
-
-**Lesson Learned:** AWS managed policies lag behind new API actions. For EKS, an explicit `eks:*` inline policy is the most reliable approach.
+**Files Changed:** `Jenkins-Server-TF/main.tf`
 
 ---
 
-## Issue #2: Instance Profile Credential Caching
+## Issue 4 — Wrong Cluster Name (cloud-native-cluster vs nimbus-cluster)
 
-**Category:** IAM & Permissions | **Severity:** High | **Deployments:** 1, 2
+**Symptom:**  
+Terraform created a cluster named `cloud-native-cluster` instead of `nimbus-cluster`, causing all subsequent `kubectl` and ArgoCD operations to fail.
 
-**Error Message:** Same `eks:DescribeClusterVersions` error persisted after adding the inline policy and waiting 30+ seconds.
+**Root Cause:**  
+`*.tfvars` was in `.gitignore`, so `nimbus.tfvars` was never pushed to GitHub. Jenkins cloned the repo without it, and Terraform used the default variable value `cloud-native-cluster`.
 
-**Root Cause:** EC2 instances retrieve IAM credentials from the Instance Metadata Service (IMDS). These credentials are cached with a TTL and do not immediately reflect policy changes.
+**Fix:**  
+Added an explicit exception to `.gitignore`:
 
-**Investigation:** Ran `aws iam list-role-policies` — confirmed `EKSFullAccess` appeared. Waited 30 seconds, retried — same error.
+```
+!EKS-Terraform/nimbus.tfvars
+```
 
-**Solution:** Exported `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as environment variables, overriding the instance profile.
-
-**Prevention:** The `setup-jcasc.sh` script now configures AWS credentials for both jenkins and root users, and exports them for the current session. The EKS inline policy is also in Terraform now, so it's attached at creation time (no policy update delay).
-
-**Lesson Learned:** When IAM policy changes appear correct but aren't taking effect on EC2, the IMDS cache is the most likely culprit. Export credentials to override.
+**Files Changed:** `.gitignore`
 
 ---
 
-## Issue #3: Docker Build Failure — npm ci Requires package-lock.json
+## Issue 5 — ESO Error: namespace "nimbus" Not Found
 
-**Category:** CI/CD Pipeline | **Severity:** High | **Deployments:** 1, 2
+**Symptom:**  
+External Secrets Operator failed to create SecretStores because the `nimbus` namespace did not exist at deploy time.
 
-**Error Message:**
+**Root Cause:**  
+`namespaces.tf` only created `three-tier`, `monitoring`, and `argocd` namespaces. The `nimbus` namespace was supposed to be created by ArgoCD, which hadn't run yet when ESO deployed.
+
+**Fix:**  
+Added `kubernetes_namespace.nimbus` to `namespaces.tf` and added it to ESO's `depends_on`:
+
+```hcl
+resource "kubernetes_namespace" "nimbus" {
+  metadata { name = "nimbus" }
+}
 ```
-npm error: The `npm ci` command can only install with an existing package-lock.json
-```
 
-**Root Cause:** The backend Dockerfile used `RUN npm ci --only=production` which requires a `package-lock.json` file. The project scaffold only had `package.json`.
-
-**Solution:** Changed the Dockerfile to use `npm install --omit=dev` instead of `npm ci`.
-
-**Prevention:** For production, commit `package-lock.json` to the repo. For portfolio projects, `npm install` is acceptable.
-
-**Lesson Learned:** Always check if Dockerfile commands match the files actually committed to the repo.
+**Files Changed:** `EKS-Terraform/namespaces.tf`, `EKS-Terraform/helm-eso.tf`
 
 ---
 
-## Issue #4: ArgoCD CRD Annotations Too Long
+## Issue 6 — Kyverno ALB Webhook Errors (6 Errors)
 
-**Category:** GitOps & ArgoCD | **Severity:** Medium | **Deployments:** 1, 2, 3, 4
+**Symptom:**  
+Kyverno installation failed with 6 webhook admission errors during Helm install.
 
-**Error Message:**
-```
-The CustomResourceDefinition "applicationsets.argoproj.io" is invalid: 
-metadata.annotations: Too long: may not be more than 262144 bytes
-```
+**Root Cause:**  
+Kyverno creates Service resources during installation, which triggered the ALB mutating webhook. The ALB controller pod was not yet ready to respond to webhook calls.
 
-**Root Cause:** Newer ArgoCD versions have CRD manifests exceeding the 262144 byte Kubernetes annotation limit for client-side apply.
+**Fix:**  
+Added `depends_on = [helm_release.alb_controller]` to Kyverno's Helm release so it waits for ALB controller to be fully ready:
 
-**Solution:** Applied with `--server-side --force-conflicts`:
-```bash
-kubectl apply -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
-  --server-side --force-conflicts
-```
-
-**Lesson Learned:** Server-side apply is the future direction for large manifest installations.
+**Files Changed:** `EKS-Terraform/helm-kyverno.tf`
 
 ---
 
-## Issue #5: ArgoCD Overwrote Working Deployments
+## Issue 7 — nimbus-security ArgoCD App OutOfSync
 
-**Category:** GitOps & ArgoCD | **Severity:** Critical | **Deployments:** 1
+**Symptom:**  
+ArgoCD showed `nimbus-security` as OutOfSync/Missing. `ExternalSecret` and `SecretStore` resources failed to apply.
 
-**Error Message:** All pods went to `InvalidImageName` — trying to pull `<ACCOUNT_ID>.dkr.ecr...`
+**Root Cause:**  
+`external-secrets.yaml` used `apiVersion: external-secrets.io/v1beta1`, but the installed ESO version only supports `v1`.
 
-**Root Cause:** Deployment manifests were updated locally with `sed` but not pushed to Git. ArgoCD synced the old Git state (with `<ACCOUNT_ID>` placeholders) over the working cluster state.
+**Fix:**  
+Updated all 3 resources in `external-secrets.yaml`:
 
-**Solution:** Push manifest changes to Git immediately after updating them.
+```yaml
+# Before
+apiVersion: external-secrets.io/v1beta1
+# After
+apiVersion: external-secrets.io/v1
+```
 
-**Prevention:** The deployment guide now emphasizes: **always push to Git BEFORE enabling ArgoCD sync**.
-
-**Lesson Learned:** Git is the single source of truth in GitOps. If Git is wrong, ArgoCD makes the cluster wrong too. There is no "temporary local override."
+**Files Changed:** `Kubernetes-Manifests-file/Security/external-secrets.yaml`
 
 ---
 
-## Issue #6: Pods Stuck in Pending — t3.small ENI Pod Limit
+## Issue 8 — Kafka Brokers All Pending (PVCs Unbound)
 
-**Category:** Kubernetes & Scheduling | **Severity:** Critical | **Deployments:** 1
+**Symptom:**  
+All 3 Kafka broker pods were stuck in `Pending` state. PVCs showed `STATUS: Pending` with `STORAGECLASS: <unset>`.
 
-**Error Message:**
+**Root Cause:**  
+No StorageClass existed in the cluster. The EBS CSI driver was installed but no gp3 StorageClass was configured, so Kafka PVCs could not be bound.
+
+**Fix:**  
+Created a `gp3` StorageClass in Terraform and set it as the cluster default:
+
+```hcl
+resource "kubernetes_storage_class" "gp3" {
+  metadata {
+    name = "gp3"
+    annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+  }
+  storage_provisioner = "ebs.csi.aws.com"
+  parameters          = { type = "gp3", encrypted = "true" }
+}
 ```
-0/3 nodes are available: 3 Too many pods
-```
 
-**Root Cause:** t3.small has an ENI-based pod limit of 11 pods per node. With 3 nodes (33 total capacity), system pods consumed ~10 slots, leaving only 23 for app + ArgoCD + monitoring (30+ pods needed).
+Also added `class: gp3` to `kafka-cluster.yaml`.
 
-**Solution:**
-- Deployment 1: Reduced replicas, scaled down non-essential ArgoCD components
-- Deployment 2+: Upgraded to t3.xlarge (58 pods/node)
-
-**Lesson Learned:** Kubernetes scheduling considers CPU, memory, AND pod count. Pod count from ENI limits is often the first constraint hit on smaller instances.
+**Files Changed:** `EKS-Terraform/ebs-csi.tf`, `Kubernetes-Manifests-file/Kafka/kafka-cluster.yaml`
 
 ---
 
-## Issue #7: Cannot Scale to 4 Nodes — vCPU Quota
+## Issue 9 — Services 0/1 Running (RDS SSL Errors)
 
-**Category:** IAM & Permissions | **Severity:** Medium | **Deployments:** 1
+**Symptom:**  
+Auth, cart, and order services were `0/1 Running`. Readiness probe returning 503. Service logs showed:
 
-**Error Message:**
 ```
-VcpuLimitExceeded — current vCPU limit of 8
+no pg_hba.conf entry for host, no encryption
 ```
 
-**Root Cause:** AWS account default vCPU limit of 8. 3 nodes (6 vCPU) + Jenkins (2 vCPU) = 8, hitting the ceiling.
+Then after SSL fix:
 
-**Solution:** Requested quota increase to 20 via AWS Service Quotas.
+```
+self-signed certificate in certificate chain
+```
 
-**Prevention:** Added as a prerequisite in the deployment guide. Request quota increase BEFORE starting.
+**Root Cause:**  
+- RDS enforces SSL by default — Node.js `pg` module doesn't use SSL unless told to.
+- After adding `?sslmode=require`, Node.js rejected the RDS self-signed certificate.
 
-**Lesson Learned:** AWS default quotas are conservative. Always check quotas before planning infrastructure.
+**Fix (Step 1):** Updated `DATABASE_URL` in Secrets Manager to include `?sslmode=require`.  
+**Fix (Step 2):** Added `NODE_TLS_REJECT_UNAUTHORIZED: "0"` to all three service Helm values files.
+
+**Files Changed:**  
+`helm/nimbus-service/values-auth.yaml`  
+`helm/nimbus-service/values-cart.yaml`  
+`helm/nimbus-service/values-order.yaml`  
+`Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure` (DATABASE_URL now includes `?sslmode=require` permanently)
 
 ---
 
-## Issue #8: Jenkins Quality Gate Timeout
+## Issue 10 — Grafana CrashLoopBackOff
 
-**Category:** CI/CD Pipeline | **Severity:** High | **Deployments:** 1
+**Symptom:**  
+Grafana pod (2/3) was in `CrashLoopBackOff`. Logs showed:
 
-**Error Message:**
 ```
-Timeout has been exceeded — status is 'IN_PROGRESS'
+Only one datasource per organization can be marked as default
 ```
 
-**Root Cause:** No SonarQube webhook configured. SonarQube completed analysis but had no way to notify Jenkins.
+**Root Cause:**  
+`kube-prometheus-stack` marks Prometheus as `isDefault: true` by default. The additional Loki and Tempo datasources conflicted.
 
-**Solution:** Created webhook in SonarQube pointing to Jenkins.
+**Fix:**  
+Added `sidecar.datasources.isDefaultDatasource: false` to `helm-monitoring.tf`:
 
-**Prevention:** The `setup-jcasc.sh` script now creates the webhook automatically via SonarQube API. Uses private IP (not localhost — see Issue #16).
+```hcl
+sidecar = {
+  datasources = {
+    isDefaultDatasource = false
+  }
+}
+```
 
-**Lesson Learned:** The SonarQube-Jenkins integration requires two-way configuration: Jenkins calls SonarQube for analysis, SonarQube calls Jenkins back via webhook.
+**Files Changed:** `EKS-Terraform/helm-monitoring.tf`
 
 ---
 
-## Issue #9: Jenkins SCM Credential Dropdown Empty
+## Issue 11 — ExternalDNS Conflict Between Two Ingresses
 
-**Category:** CI/CD Pipeline | **Severity:** High | **Deployments:** 1, 2
+**Symptom:**  
+`platinum-consults.com` kept pointing to the old three-tier ALB instead of the NimbusRetail ALB. ExternalDNS was upserting the wrong ALB every 60 seconds.
 
-**Error Message:** Credentials dropdown in Pipeline SCM configuration showed no options.
+**Root Cause:**  
+Both the three-tier ingress and the nimbus ingress claimed `platinum-consults.com` — the three-tier ingress had it in both the `external-dns` annotation AND `spec.rules[].host`. ExternalDNS read the host from the spec even after the annotation was removed.
 
-**Root Cause:** `github-token` was created as "Secret text" type. Jenkins SCM requires "Username with password" type.
+**Fix:**  
+Removed `host: platinum-consults.com` from the three-tier ingress spec in Git so ArgoCD would apply the change and ExternalDNS would stop claiming the hostname:
 
-**Solution:** Created `github-creds` as "Username with password" type.
-
-**Prevention:** JCasC now creates both credential types automatically — `github-creds` (Username/Password for SCM) and `github-token` (Secret text for pipeline git push).
-
-**Lesson Learned:** Jenkins has multiple credential types for different contexts. SCM plugins use Username/Password; pipeline scripts can use Secret text.
-
----
-
-## Issue #10: sonar-scanner Not Found in Pipeline
-
-**Category:** Monitoring | **Severity:** High | **Deployments:** 1, 2, 3
-
-**Error Message:**
-```
-sonar-scanner: not found
-```
-
-**Root Cause:** The user-data script's sonar-scanner download/installation failed silently during EC2 boot. User-data scripts run as fire-and-forget — individual failures don't stop the script.
-
-**Solution:**
-- Deployments 1-2: Manual install after SSH
-- Deployment 3+: `tools-install.sh` includes verification step and the install is more robust
-
-**Prevention:** The tools-install.sh now verifies sonar-scanner after installation and logs a warning if it fails.
-
-**Lesson Learned:** User-data scripts are unreliable for complex installations. Always verify tool availability after boot.
+**Files Changed:** `Kubernetes-Manifests-file/ingress.yaml`
 
 ---
 
-## Issue #11: ALB Not Provisioning — Missing IAM Permissions
+## Issue 12 — ALB 503 on All API Calls
 
-**Category:** IAM & Permissions | **Severity:** Critical | **Deployments:** 2
+**Symptom:**  
+All API calls from the NimbusRetail frontend returned `503 Service Temporarily Unavailable`.
 
-**Error Message:**
+**Root Cause:**  
+The ALB health check path was set to `/` (the nginx default), but backend microservices don't expose a `/` endpoint — only `/healthz`, `/readyz`, and `/metrics`. ALB marked all backend target groups as unhealthy.
+
+**Fix:**  
+Changed health check path to `/healthz` and added a custom nginx config to the frontend that responds 200 to `/healthz`:
+
+```yaml
+alb.ingress.kubernetes.io/healthcheck-path: /healthz
 ```
-elasticloadbalancing:DescribeListenerAttributes access denied
-ec2:DescribeSecurityGroups unauthorized operation
+
+```nginx
+location /healthz {
+  return 200 'ok';
+  add_header Content-Type text/plain;
+}
 ```
 
-**Root Cause:** The downloaded ALB Controller IAM policy (v2.7.1) was missing newer API actions. The Helm chart installed a newer controller binary that requires `DescribeListenerAttributes` and EC2 security group permissions.
-
-**Solution:** Created a broader IAM policy with `elasticloadbalancing:*` and `ec2:Describe*` permissions.
-
-**Prevention:** The `EKS-Terraform/alb-controller.tf` now includes the broad policy from day one — no manual policy updates needed.
-
-**Lesson Learned:** IAM policy version mismatches between documentation and software are recurring. Broader permissions are safer than trying to enumerate individual actions.
+**Files Changed:**  
+`Kubernetes-Manifests-file/Nimbus-Frontend/ingress.yaml`  
+`Kubernetes-Manifests-file/Nimbus-Frontend/deployment.yaml`
 
 ---
 
-## Issue #12: ImagePullBackOff After Redeployment
+## Issue 13 — Database Schemas Not Initialized on RDS
 
-**Category:** Kubernetes & Scheduling | **Severity:** Critical | **Deployments:** 2
+**Symptom:**  
+Auth service returned `{"error":"internal error"}` on register. Logs showed:
 
-**Error Message:**
 ```
-Failed to pull image "...backend:3": not found
-```
-
-**Root Cause:** After teardown and rebuild, deployment manifests in Git still had image tags (:2, :3) from previous Jenkins builds. New ECR repos only had tag :1 from fresh bootstrap.
-
-**Solution:** Used sed with regex to replace any tag number:
-```bash
-sed -i 's|backend:[0-9]*|backend:1|' Kubernetes-Manifests-file/Backend/deployment.yaml
+relation "auth.users" does not exist
 ```
 
-**Prevention:** Bootstrap step now includes a check/fix for image tags alongside the `<ACCOUNT_ID>` replacement.
+**Root Cause:**  
+The `scripts/init-db.sql` in the app repo only runs automatically via Docker's `docker-entrypoint-initdb.d` mechanism in docker-compose. There was no equivalent step for EKS — the RDS database existed but had no schemas or tables.
 
-**Lesson Learned:** Git retains state from the last deployment, but AWS resources (ECR) start fresh after teardown. The manifest-to-registry mismatch is inevitable unless you reset manifests.
+**Fix:**  
+Ran a one-time Kubernetes Job using the `nimbus-secrets` DATABASE_URL to execute the init SQL against RDS:
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  namespace: nimbus
+spec:
+  template:
+    spec:
+      containers:
+      - name: psql
+        image: postgres:16-alpine
+        command: ["sh", "-c"]
+        args: ["psql $DATABASE_URL -c 'CREATE SCHEMA IF NOT EXISTS auth' ..."]
+        envFrom:
+        - secretRef:
+            name: nimbus-secrets
+```
+
+**Lesson:** Database initialization must be an explicit step in the infrastructure pipeline for EKS deployments. Added to Jenkinsfile-Infrastructure as a permanent fix.
 
 ---
 
-## Issue #13: Ingress ADDRESS Empty After Apply
+## Issue 14 — Kyverno Blocked Kubernetes Job (No Resource Limits)
 
-**Category:** Kubernetes & Scheduling | **Severity:** Medium | **Deployments:** 2
+**Symptom:**  
+```
+admission webhook "validate.kyverno.svc-fail" denied the request:
+require-resource-limits: CPU and memory limits are required
+```
 
-**Error Message:** `kubectl get ingress` showed the resource but ADDRESS column was empty for 5+ minutes.
+**Root Cause:**  
+Kyverno policy `require-resource-limits` enforces that all containers in the `nimbus` namespace must declare resource limits. The db-init Job had no `resources` block.
 
-**Root Cause:** Ingress resource was created before the ALB Controller was installed. The controller doesn't reconcile pre-existing resources.
+**Fix:**  
+Added resource requests and limits to the Job container:
 
-**Solution:** Delete and reapply the ingress after the controller is running.
-
-**Prevention:** In Terraform deployment, the ALB controller is installed before any ingress resources are created (dependency ordering via `depends_on`).
-
-**Lesson Learned:** Kubernetes controllers reconcile resources created AFTER the controller starts. Pre-existing resources may not be detected.
+```yaml
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "100m"
+```
 
 ---
 
-## Issue #14: JCasC sonarGlobalConfiguration Not Recognized
+## Summary Table
 
-**Category:** Jenkins Automation | **Severity:** Critical | **Deployments:** 3
-
-**Error Message:**
-```
-Invalid configuration elements for type: class jenkins.model.GlobalConfigurationCategory$Unclassified : sonarGlobalConfiguration
-```
-
-**Root Cause:** The `sonarGlobalConfiguration` attribute name used in the JCasC YAML is not recognized by the configuration-as-code plugin in newer Jenkins versions. The SonarQube plugin's JCasC integration uses a different attribute structure than documented.
-
-**Investigation:** Jenkins boot failed with `ConfigurationAsCodeBootFailure`. The error listed all available attributes under `unclassified:` — `sonarGlobalConfiguration` was not among them.
-
-**Solution:** Removed SonarQube configuration from JCasC YAML entirely. Instead, configured SonarQube via a Groovy init script (`/var/lib/jenkins/init.groovy.d/sonarqube.groovy`) that runs on Jenkins boot:
-```groovy
-import hudson.plugins.sonar.*
-import jenkins.model.Jenkins
-
-def instance = Jenkins.getInstance()
-def sonarConfig = instance.getDescriptor(SonarGlobalConfiguration.class)
-def sonarInstallation = new SonarInstallation(
-    'sonar', 'http://localhost:9000', 'sonar',
-    null, null, null, null, null, null
-)
-sonarConfig.setInstallations(sonarInstallation)
-sonarConfig.save()
-```
-
-**Prevention:** The `setup-jcasc.sh` script creates this Groovy init script automatically.
-
-**Lesson Learned:** JCasC doesn't support all Jenkins plugin configurations. When JCasC fails for a specific plugin, Groovy init scripts are the reliable fallback. Always check the actual available attributes (listed in the error message) rather than trusting documentation.
-
----
-
-## Issue #15: Jenkins Plugin Dependency Hell
-
-**Category:** Jenkins Automation | **Severity:** Critical | **Deployments:** 3
-
-**Error Message:** Multiple errors including:
-```
-Failed Loading plugin Jenkins Workspace Cleanup Plugin v0.49 (ws-cleanup)
-version 2.4 or later of plugin 'workflow-job' needs to be installed
-docker-pipeline: 404 Not Found
-```
-
-**Root Cause:** Three compounding issues:
-1. Manual `.hpi` file downloads from `updates.jenkins.io/latest/` don't resolve dependencies
-2. The `docker-pipeline` plugin was renamed to `docker-workflow` — the old name returns 404
-3. Jenkins CLI (`jenkins-cli.jar`) requires the Jenkins URL to be configured, but JCasC (which sets the URL) requires the `configuration-as-code` plugin, which we're trying to install via CLI — a circular dependency
-4. Jenkins mirror outage (503 Service Unavailable) blocked all plugin downloads for several hours
-
-**Investigation:** Tried multiple approaches in sequence:
-- `jenkins-cli.jar install-plugin` → 403 "Jenkins URL is not configured"
-- Setting URL in JCasC → `configuration-as-code` plugin not installed yet
-- Setting URL in `unclassified.location` → plugin not loaded
-- Manual `.hpi` wget downloads → missing dependencies crash Jenkins
-- `jenkins-plugin-cli` binary → not bundled with newer Jenkins
-
-**Solution:** Used `jenkins-plugin-manager` standalone JAR from GitHub (not from Jenkins mirrors):
-```bash
-wget -q "https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.13.2/jenkins-plugin-manager-2.13.2.jar" -O /tmp/jenkins-plugin-manager.jar
-
-java -jar /tmp/jenkins-plugin-manager.jar \
-  --war /usr/share/java/jenkins.war \
-  --plugin-download-directory /var/lib/jenkins/plugins \
-  --plugins configuration-as-code job-dsl workflow-aggregator docker-workflow sonar ...
-```
-
-Key fixes:
-- `docker-workflow` instead of `docker-pipeline`
-- Jenkins is STOPPED before plugin install, started AFTER all plugins are in place
-- Plugin manager resolves ALL dependencies automatically
-- Retry logic (3 attempts with 30-second delays) for transient mirror issues
-
-**Prevention:** The `tools-install.sh` now downloads the plugin manager JAR from GitHub (always available), installs all plugins BEFORE Jenkins first boot, and includes retry logic.
-
-**Lesson Learned:** Jenkins plugin management is the single hardest part of Jenkins automation. The `jenkins-plugin-manager` JAR from GitHub is the only reliable approach — it handles dependency resolution, retries, and doesn't require a running Jenkins instance.
-
----
-
-## Issue #16: SonarQube Webhook Rejects Localhost
-
-**Category:** Jenkins Automation | **Severity:** High | **Deployments:** 4
-
-**Error Message:**
-```json
-{"errors":[{"msg":"Invalid URL: loopback and wildcard addresses are not allowed for webhooks."}]}
-```
-
-**Root Cause:** Newer versions of SonarQube block webhook URLs pointing to loopback addresses (localhost, 127.0.0.1) as a security measure to prevent SSRF attacks.
-
-**Investigation:** The `setup-jcasc.sh` script tried to create a webhook at `http://localhost:8080/sonarqube-webhook/`. SonarQube rejected it with the loopback error.
-
-**Solution:** Use the EC2 instance's private IP instead of localhost:
-```bash
-PRIVATE_IP=$(hostname -I | awk '{print $1}')
-curl -s -u "admin:${SONAR_NEW_PASS}" -X POST \
-  "http://localhost:9000/api/webhooks/create?name=jenkins&url=http://${PRIVATE_IP}:8080/sonarqube-webhook/"
-```
-
-**Prevention:** The `setup-jcasc.sh` script now uses `hostname -I` to get the private IP automatically. If that also fails, it falls back to the public IP.
-
-**Lesson Learned:** Security improvements in third-party tools can break existing automation. Always use the actual network IP (private or public) instead of localhost for inter-service communication, even on the same machine.
-
----
-
-## Issue #17: Grafana Data Source Pointing to Wrong Prometheus URL
-
-**Category:** Monitoring | **Severity:** Medium | **Deployments:** 4
-
-**Error Message:**
-```
-Post "http://monitoring-stack-kube-prom-prometheus.monitoring:9090/api/v1/query": 
-dial tcp 172.20.239.226:9090: connect: connection refused
-```
-
-**Root Cause:** During Deployment 4, monitoring was first installed via ArgoCD (which created resources prefixed `monitoring-stack-*`) then reinstalled via Helm directly (which created resources prefixed `monitoring-*`). The Grafana data source provisioning configmap from the ArgoCD install (`monitoring-stack-kube-prom-grafana-datasource`) pointed to the old service name. When the old services were deleted, Grafana couldn't connect to Prometheus. The data source was marked as "Provisioned" in Grafana UI, meaning it couldn't be edited through the interface.
-
-**Investigation:**
-1. Grafana showed "connection refused" for Prometheus queries
-2. `kubectl get svc -n monitoring | grep prometheus` showed both `monitoring-*` and `monitoring-stack-*` services
-3. Grafana's data source pointed to `monitoring-stack-kube-prom-prometheus` (old/deleted)
-4. The correct service was `monitoring-kube-prometheus-prometheus` (Helm install)
-5. Found 31 old `monitoring-stack-*` configmaps still lingering
-
-**Solution:**
-```bash
-# Delete ALL old monitoring-stack resources
-kubectl delete configmap -n monitoring -l app.kubernetes.io/instance=monitoring-stack
-kubectl delete secret monitoring-stack-grafana -n monitoring
-kubectl delete alertmanager monitoring-stack-kube-prom-alertmanager -n monitoring
-kubectl delete prometheus monitoring-stack-kube-prom-prometheus -n monitoring
-
-# Restart Grafana to reload correct datasource
-kubectl rollout restart deployment monitoring-grafana -n monitoring
-```
-
-**Prevention:** Monitoring is now managed by Terraform Helm provider (`EKS-Terraform/helm-monitoring.tf`), NOT ArgoCD. This was moved because ArgoCD's Helm rendering skips CRDs by design (Helm v3 policy), which caused Prometheus and Alertmanager StatefulSets to never be created. The `monitoring-stack.yaml` was removed from `argocd/apps/`.
-
-**Lesson Learned:** Never manage the same resources through two different tools (ArgoCD + Helm). The naming conflicts create ghost resources that poison data source configurations. Choose one tool per resource group and stick with it. For kube-prometheus-stack specifically, Terraform Helm provider handles CRDs correctly while ArgoCD does not.
-
----
-
-## Summary & Key Takeaways
-
-### Top 7 Lessons for Cloud-Native Deployments
-
-**1. IAM is the #1 source of deployment failures.** Four of seventeen issues (24%) were IAM-related. Managed policies lag behind API changes, credential caching creates invisible delays, and different components use separate IAM roles (IRSA vs instance profile).
-
-**2. GitOps means Git is the source of truth — no exceptions.** ArgoCD enforces Git state ruthlessly. Any manual kubectl changes will be reverted. Push to Git first, always.
-
-**3. Instance type selection is about pod capacity, not just CPU/RAM.** t3.small's 11-pod ENI limit was the binding constraint. Check ENI limits before selecting instance types.
-
-**4. Jenkins plugin management requires the plugin-manager JAR.** Manual `.hpi` downloads, Jenkins CLI, and `jenkins-plugin-cli` all have fatal limitations. The standalone `jenkins-plugin-manager` JAR from GitHub is the only reliable approach.
-
-**5. JCasC doesn't support everything.** The SonarQube plugin's JCasC integration is broken in newer Jenkins. Groovy init scripts are the reliable fallback for unsupported configurations.
-
-**6. Don't manage the same resources with two tools.** ArgoCD + Helm for the same monitoring stack created naming conflicts, ghost configmaps, and broken data sources. One tool per resource group.
-
-**7. External dependencies fail.** Jenkins plugin mirrors went down (503) for hours. SonarQube changed its localhost webhook policy. Always build retry logic and fallback mechanisms.
-
----
-
-*Ibrahim | [github.com/ibrahim-2010/cloud-native-eks](https://github.com/ibrahim-2010/cloud-native-eks) | [platinum-consults.com](http://platinum-consults.com)*
+| # | Issue | Root Cause | Fix |
+|---|-------|-----------|-----|
+| 1 | Only 2 Jenkins jobs | tools-install.sh overwrote JCasC | wget full jenkins.yaml in setup-jcasc.sh |
+| 2 | Kubernetes provider → localhost | EKS endpoint empty at plan time | Two-stage Terraform apply |
+| 3 | RDS/ElastiCache AccessDenied | Missing IAM permissions, policy limit hit | Inline IAM policy |
+| 4 | Wrong cluster name | nimbus.tfvars gitignored | Added !nimbus.tfvars to .gitignore |
+| 5 | ESO namespace not found | nimbus namespace created too late | Added namespace to Terraform |
+| 6 | Kyverno webhook errors | ALB controller not ready | depends_on ALB controller |
+| 7 | ExternalSecret v1beta1 error | Wrong API version | Changed to v1 |
+| 8 | Kafka PVCs unbound | No StorageClass in cluster | Added gp3 StorageClass via EBS CSI |
+| 9 | Services 0/1 (SSL errors) | RDS requires SSL, CA not trusted | sslmode=require + NODE_TLS_REJECT_UNAUTHORIZED=0 |
+| 10 | Grafana CrashLoopBackOff | Multiple default datasources | isDefaultDatasource = false |
+| 11 | ExternalDNS DNS conflict | Two ingresses claiming same host | Removed host from three-tier ingress spec |
+| 12 | ALB 503 on API calls | Wrong health check path (/) | Changed to /healthz + nginx config |
+| 13 | Database schemas missing | init-db.sql only runs in docker-compose | One-time Kubernetes Job against RDS |
+| 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |

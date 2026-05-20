@@ -24,7 +24,7 @@ pipeline {
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         CLUSTER_NAME       = 'nimbus-cluster'
-        PLATFORM_REPO      = 'https://github.com/ibrahim-2010/cloud-native-eks.git'
+        PLATFORM_REPO      = 'https://github.com/ibrahim-2010/nimbus-retail-platform.git'
     }
 
     stages {
@@ -260,6 +260,9 @@ MANIFEST
             sh '''
                 ARGOCD_LB=$(kubectl get svc argocd-server -n argocd \
                     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+                GRAFANA_PASS=$(aws secretsmanager get-secret-value \
+                    --secret-id ${CLUSTER_NAME}/grafana/admin-password \
+                    --query SecretString --output text --region ${AWS_DEFAULT_REGION} 2>/dev/null || echo "see Secrets Manager")
                 echo "
 ╔══════════════════════════════════════════════════════════════╗
 ║           INFRASTRUCTURE PIPELINE COMPLETE                    ║
@@ -272,7 +275,7 @@ MANIFEST
 ║  ArgoCD               : https://$ARGOCD_LB                   ║
 ║                                                               ║
 ║  CREDENTIALS                                                  ║
-║  Grafana              : admin / CloudNative2026!              ║
+║  Grafana              : admin / $GRAFANA_PASS                 ║
 ║  ArgoCD               : admin / (printed above)               ║
 ║                                                               ║
 ║  ArgoCD is syncing apps — Kafka takes ~5 min.                 ║

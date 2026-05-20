@@ -170,7 +170,7 @@ PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/n
 
 cat > /tmp/jenkins-casc.yaml << 'CASC_EOF'
 jenkins:
-  systemMessage: "Cloud-Native EKS Project — Configured via JCasC"
+  systemMessage: "Nimbus Retail Platform — Configured via JCasC"
   numExecutors: 2
   securityRealm:
     local:
@@ -224,38 +224,43 @@ credentials:
 
 jobs:
   - script: >
-      pipelineJob('three-tier-backend') {
-        description('Backend CI/CD Pipeline')
+      pipelineJob('nimbus-infrastructure') {
+        description('Deploy EKS cluster + RDS + Redis + Kafka + ESO + Kyverno + observability + ArgoCD')
         definition {
           cpsScm {
             scm {
               git {
                 remote {
-                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
+                  url('https://github.com/ibrahim-2010/nimbus-retail-platform.git')
                   credentials('github-creds')
                 }
                 branches('*/main')
               }
             }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Backend')
+            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure')
           }
         }
       }
   - script: >
-      pipelineJob('three-tier-frontend') {
-        description('Frontend CI/CD Pipeline')
+      pipelineJob('nimbus-auth-service') {
+        description('auth-service — SonarQube + Trivy + ECR + Helm values update')
+        parameters {
+          choiceParam('SERVICE_NAME',
+            ['auth-service', 'catalog-service', 'cart-service', 'order-service', 'notification-service'],
+            'NimbusRetail service to build and deploy')
+        }
         definition {
           cpsScm {
             scm {
               git {
                 remote {
-                  url('https://github.com/ibrahim-2010/cloud-native-eks.git')
+                  url('https://github.com/ibrahim-2010/nimbus-retail-platform.git')
                   credentials('github-creds')
                 }
                 branches('*/main')
               }
             }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Frontend')
+            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Nimbus')
           }
         }
       }
@@ -281,7 +286,7 @@ sudo systemctl daemon-reload
 # ─── Download setup-jcasc.sh ─────────────────────────────────────────────────
 echo "===> Downloading setup-jcasc.sh"
 wget -q -O /opt/setup-jcasc.sh \
-  "https://raw.githubusercontent.com/ibrahim-2010/cloud-native-eks/main/Jenkins-Server-TF/jcasc/setup-jcasc.sh" \
+  "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/setup-jcasc.sh" \
   || echo "  WARNING: Could not download setup-jcasc.sh"
 sudo chmod +x /opt/setup-jcasc.sh 2>/dev/null || true
 

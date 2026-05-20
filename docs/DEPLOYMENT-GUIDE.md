@@ -1,450 +1,384 @@
-# Cloud-Native EKS Project — Complete Deployment Guide
+# NimbusRetail — Full Stack Deployment Guide
 
-> Tested and verified across four deployment cycles. Every command is the one that actually worked.
-
----
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Phase 1: Bootstrap](#phase-1-bootstrap)
-- [Phase 2: Deploy Jenkins Server](#phase-2-deploy-jenkins-server)
-- [Phase 3: Configure Jenkins (Automated)](#phase-3-configure-jenkins-automated)
-- [Phase 4: Deploy EKS Cluster](#phase-4-deploy-eks-cluster)
-- [Phase 5: Deploy Application Stack](#phase-5-deploy-application-stack)
-- [Phase 6: ArgoCD & App-of-Apps](#phase-6-argocd--app-of-apps)
-- [Phase 7: Run CI/CD Pipelines](#phase-7-run-cicd-pipelines)
-- [Phase 8: Verify Everything](#phase-8-verify-everything)
-- [Cleanup](#cleanup)
-- [Troubleshooting](#troubleshooting)
+**Cluster:** nimbus-cluster | **Region:** us-east-1 | **Account:** 022374769206
+**Total time:** ~45–55 min | **Cost while running:** ~$0.51/hr
 
 ---
 
-## Prerequisites
+## Deployment Overview
 
-Before starting, ensure you have:
+| Step | Where it runs | What it does |
+|---|---|---|
+| 0 — Push to GitHub | Local | All code must be on GitHub before anything deploys |
+| 1 — Bootstrap | Local (Git Bash) | S3, DynamoDB, key pair |
+| 2 — Jenkins server | Local (Git Bash) | Provision the Jenkins EC2 |
+| 3 — Configure Jenkins | SSH into Jenkins EC2 | Inject credentials, create jobs |
+| 4 — Infrastructure pipeline | Jenkins UI | **Everything else** — EKS, RDS, Redis, ArgoCD |
+| 5 — Service builds | Jenkins UI | Build + push images, ArgoCD deploys pods |
 
-- AWS account with IAM user credentials (Access Key + Secret Key)
-- IAM user with these permissions: EC2, EKS, ECR, S3, Route 53, IAM, VPC, CloudFormation full access
-- **vCPU quota of at least 20** — check and request increase:
-  ```bash
-  # Check current quota
-  aws service-quotas get-service-quota \
-    --service-code ec2 --quota-code L-1216C47A \
-    --region us-east-1 --query "Quota.Value"
-
-  # Request increase if below 20
-  aws service-quotas request-service-quota-increase \
-    --service-code ec2 --quota-code L-1216C47A \
-    --desired-value 20 --region us-east-1
-  ```
-  Small increases are usually approved within 15-30 minutes. **Do not proceed until quota shows 20.0.**
-
-- AWS CLI v2 installed and configured locally
-- Terraform >= 1.9.0
-- Git & GitHub account with Personal Access Token (PAT with `repo` + `write:packages` scopes)
-- A domain name with ability to change nameservers
-- SSH key pair in us-east-1 (bootstrap creates this if it doesn't exist)
+Steps 0–3 are one-time local setup. Steps 4–5 run entirely from the Jenkins server.
 
 ---
 
-## Phase 1: Bootstrap
+## Cost while running
 
-Creates all prerequisite AWS resources. This script is **idempotent** — safe to run multiple times. Existing resources are skipped.
+| Resource | Instance | ~$/hr |
+|---|---|---|
+| EKS control plane | — | $0.10 |
+| 2× worker nodes | t3.xlarge | $0.33 |
+| RDS PostgreSQL | db.t3.micro | $0.017 |
+| ElastiCache Redis | cache.t3.micro | $0.017 |
+| Jenkins EC2 | t3.medium | $0.042 |
+| **Total** | | **~$0.51/hr** |
+
+---
+
+## Step 0 — Push Both Repos to GitHub
+
+> ArgoCD watches the platform repo live. Nothing deploys until code is on GitHub.
+> The Jenkins EC2 also downloads `setup-jcasc.sh` from GitHub on first boot.
 
 ```bash
+# Platform repo
+cd /c/Users/19122/nimbus-retail-platform
+git add .
+git commit -m "feat: NimbusRetail platform stack — phases 2-7 + infra pipeline"
+git push origin main
+
+# App repo
+cd /c/Users/19122/Desktop/nimbus-retail-starter
+git add .
+git commit -m "feat: docker-compose fixes and documentation"
+git push origin main
+```
+
+---
+
+## Step 1 — Bootstrap (3 min, idempotent)
+
+```bash
+cd /c/Users/19122/nimbus-retail-platform
 bash bootstrap.sh
 ```
 
-**Creates:**
-- S3 bucket for Terraform state (`ibrahim-cloud-native-tf-state`)
-- DynamoDB table for state locking (`ibrahim-cloud-native-tf-lock`)
-- ECR repositories (`frontend`, `backend`)
-- EC2 key pair (`test`)
-
-**Expected output:**
-```
-╔══════════════════════════════════════════════════╗
-║         BOOTSTRAP COMPLETE                        ║
-╚══════════════════════════════════════════════════╝
-```
-
-> **Note:** S3 and DynamoDB are NOT destroyed during teardown — they persist between deployments and cost almost nothing.
+Creates: S3 state bucket, DynamoDB lock table, EC2 key pair (`test.pem`). ECR repos are created by Terraform later.
+Safe to skip if these already exist — the script checks before creating.
 
 ---
 
-## Phase 2: Deploy Jenkins Server
+## Step 2 — Deploy the Jenkins Server (5 min)
 
 ```bash
-cd Jenkins-Server-TF
+cd /c/Users/19122/nimbus-retail-platform/Jenkins-Server-TF
 terraform init
-terraform apply -auto-approve
+terraform plan
+terraform apply
 ```
 
-**What Terraform creates:**
-- EC2 instance (m7i-flex.large) with Ubuntu 22.04
-- Security group (ports 22, 8080, 9000)
-- IAM role with managed policies + EKS inline policy
-- IAM instance profile
-
-**What user-data installs automatically (wait 5 minutes):**
-- Jenkins (stopped before plugins install)
-- 102 Jenkins plugins via `jenkins-plugin-manager` JAR (with dependency resolution)
-- JCasC YAML with Jenkins URL auto-configured from EC2 metadata
-- systemd override for JCasC environment variables
-- Docker + SonarQube container
-- sonar-scanner
-- AWS CLI v2, kubectl, eksctl, Terraform, Trivy, Helm
-
-**Verification (after 5 minutes):**
+Get the IP:
 ```bash
-ssh -i test.pem ubuntu@<jenkins-ip>
-sudo su -
+terraform output jenkins_public_ip
+terraform output ssh_command   # copy this for Step 3
+```
 
-jenkins --version && docker --version && terraform --version
-aws --version && kubectl version --client && eksctl version
-helm version && trivy --version && sonar-scanner --version
-
-# Check plugins were installed
-ls /var/lib/jenkins/plugins/*.jpi /var/lib/jenkins/plugins/*.hpi 2>/dev/null | wc -l
-# Should show 100+
-
-# Check SonarQube is running
-docker ps | grep sonar
-
-# Check JCasC config is in place
-ls -la /var/lib/jenkins/casc_configs/jenkins.yaml
+Fix key permissions:
+```bash
+chmod 400 ../test.pem
 ```
 
 ---
 
-## Phase 3: Configure Jenkins (Automated)
+## Step 3 — Configure Jenkins (5 min on EC2)
 
-One interactive command that configures everything:
+Wait ~5 min for the EC2 user-data (tools-install.sh) to finish installing
+Jenkins, Docker, Terraform, kubectl, Helm, Trivy, and SonarQube.
 
+Watch the progress:
+```bash
+ssh -i ../test.pem ubuntu@<JENKINS_IP>
+sudo tail -f /var/log/tools-install.log
+# Wait until you see "Installation Complete"
+```
+
+Then run the secret injection script:
 ```bash
 sudo bash /opt/setup-jcasc.sh
 ```
 
-**Prompts for:**
-- GitHub username
-- GitHub PAT
-- AWS Account ID (12 digits)
-- Jenkins admin password (choose your own)
-- AWS Access Key ID
-- AWS Secret Access Key
-
-**Automatically configures:**
-- ✅ 6 Jenkins credentials (github-creds, github-token, ACCOUNT_ID, ECR_REPO1, ECR_REPO2, sonar)
-- ✅ SonarQube password change (admin:admin → admin:SonarAdmin2026!)
-- ✅ SonarQube token generation via API
-- ✅ SonarQube webhook creation via API (uses private IP, not localhost)
-- ✅ SonarQube server configuration in Jenkins (via Groovy init script)
-- ✅ 2 pipeline jobs (three-tier-backend, three-tier-frontend)
-- ✅ AWS CLI configured for both jenkins and root users
-- ✅ Exports AWS credentials for current session
-
-**Expected output:**
-```
-╔══════════════════════════════════════════════════╗
-║         JCASC SETUP COMPLETE                      ║
-╚══════════════════════════════════════════════════╝
-
-Auto-configured:
-  ✅ 6 credentials
-  ✅ SonarQube server
-  ✅ SonarQube webhook
-  ✅ 2 pipeline jobs
-  ✅ AWS CLI configured
+After the script completes, **all future SSH sessions use the jenkins user directly** (no `sudo su` needed):
+```bash
+ssh -i ../test.pem jenkins@<JENKINS_IP>
 ```
 
-**Verify:** Open `http://<jenkins-ip>:8080` — login with admin and your chosen password. You should see two pipeline jobs already created.
+Enter when prompted:
+
+| Prompt | Value |
+|---|---|
+| GitHub Username | `ibrahim-2010` |
+| GitHub PAT | your PAT with `repo` scope (read + write both repos) |
+| AWS Account ID | `022374769206` |
+| Jenkins Admin Password | choose a strong password — **write it down** |
+| AWS Access Key ID | **press Enter** — instance role handles all permissions |
+
+Script output confirms 6 jobs created and Jenkins is live. Exit the SSH session.
+
+| URL | Credentials |
+|---|---|
+| `http://<JENKINS_IP>:8080` | admin / your chosen password |
+| `http://<JENKINS_IP>:9000` | admin / SonarAdmin2026! |
 
 ---
 
-## Phase 4: Deploy EKS Cluster
+## Step 4 — Run the Infrastructure Pipeline (~30 min)
 
-Run this from the Jenkins server (as root, same terminal as Phase 3):
+Open Jenkins at `http://<JENKINS_IP>:8080`.
 
-```bash
-cd /tmp
-git clone https://github.com/ibrahim-2010/cloud-native-eks.git
-cd cloud-native-eks/EKS-Terraform
-terraform init
-terraform apply -auto-approve
-```
+Navigate to **`nimbus-infrastructure`** → **Build Now**.
 
-**Takes 15-20 minutes. Creates 41 resources:**
-- VPC with public/private subnets across 2 AZs
-- Internet Gateway + NAT Gateway
-- EKS cluster (v1.31) with managed node group (2x t3.xlarge)
-- OIDC provider for IRSA
-- EBS CSI driver addon + IAM role
-- AWS Load Balancer Controller (Helm) + IAM role
-- ExternalDNS (Helm) + IAM role + Route 53 hosted zone
-- Prometheus + Grafana monitoring stack (Helm)
-- 3 namespaces (three-tier, monitoring, argocd)
+This single pipeline runs 7 stages automatically:
 
-**After completion:**
-```bash
-# Configure kubectl
-aws eks update-kubeconfig --name cloud-native-cluster --region us-east-1
-kubectl get nodes
-# Should show 2 nodes in Ready status
+| Stage | What happens |
+|---|---|
+| Checkout | Clones platform repo from GitHub |
+| Terraform Init | Downloads AWS/Kubernetes/Helm providers (~500 MB, first run only) |
+| Terraform Apply — EKS Cluster | Creates EKS cluster + node group only (provider needs endpoint before k8s resources) |
+| Terraform Apply — Full Stack | Creates RDS, Redis, Strimzi, ESO, Kyverno, Loki, Tempo, Prometheus/Grafana, ECR, IRSA (~20 min) |
+| Configure kubectl | Updates `/var/lib/jenkins/.kube/config` — no manual copy needed |
+| Populate Secrets Manager | Creates `nimbus-cluster/nimbus-secrets` and `nimbus-cluster/nimbus-catalog-secrets` with real RDS + Redis values (idempotent — skips if already exists) |
+| Install ArgoCD | Installs ArgoCD, waits for it to be ready, prints admin password |
+| Deploy App-of-Apps | `kubectl apply -f argocd/app-of-apps.yaml` — ArgoCD takes over from here |
+| Initialize Database | Waits for ESO to sync `nimbus-secrets`, then runs a psql Job to create all schemas and seed catalog products against RDS (idempotent — uses IF NOT EXISTS) |
 
-# Copy kubeconfig to jenkins user
-mkdir -p /var/lib/jenkins/.kube
-cp /root/.kube/config /var/lib/jenkins/.kube/config
-chown -R jenkins:jenkins /var/lib/jenkins/.kube
-```
+**When the pipeline finishes, the console output shows:**
+- The ArgoCD admin password
+- A list of all ArgoCD apps (syncing)
+- A reminder to run the service builds
 
-**Update nameservers at your domain registrar** with the Route 53 NS records from the Terraform output (`route53_nameservers`).
+> **Kafka takes ~5 min** to elect a KRaft leader after ArgoCD syncs the Kafka app.
+> All other apps sync in 2–3 min.
 
 ---
 
-## Phase 5: Deploy Application Stack
+## Step 5 — Trigger Service Builds
 
-### 5.1 Deploy Database Layer
+Still in Jenkins, run each of these jobs once (**Build with Parameters** → **Build**):
 
-```bash
-cd /tmp/cloud-native-eks
-kubectl apply -f Kubernetes-Manifests-file/Database/
-```
+| Job | Builds and deploys |
+|---|---|
+| `nimbus-auth-service` | auth-service |
+| `nimbus-catalog-service` | catalog-service |
+| `nimbus-cart-service` | cart-service |
+| `nimbus-order-service` | order-service |
+| `nimbus-notification-service` | notification-service |
 
-Verify:
-```bash
-kubectl get pods -n three-tier
-# postgres and redis should be Running
-```
-
-### 5.2 Bootstrap Application Images (One-Time)
-
-```bash
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS \
-  --password-stdin 022374769206.dkr.ecr.us-east-1.amazonaws.com
-
-# Build and push backend
-cd /tmp/cloud-native-eks/Application-Code/backend
-docker build -t 022374769206.dkr.ecr.us-east-1.amazonaws.com/backend:1 .
-docker push 022374769206.dkr.ecr.us-east-1.amazonaws.com/backend:1
-
-# Build and push frontend
-cd ../frontend
-docker build -t 022374769206.dkr.ecr.us-east-1.amazonaws.com/frontend:1 .
-docker push 022374769206.dkr.ecr.us-east-1.amazonaws.com/frontend:1
-```
-
-### 5.3 Update Manifests and Deploy
-
-```bash
-cd /tmp/cloud-native-eks
-
-# Replace placeholders with actual values
-sed -i 's|<ACCOUNT_ID>|022374769206|g' Kubernetes-Manifests-file/Backend/deployment.yaml
-sed -i 's|<ACCOUNT_ID>|022374769206|g' Kubernetes-Manifests-file/Frontend/deployment.yaml
-sed -i 's|backend:[0-9]*|backend:1|' Kubernetes-Manifests-file/Backend/deployment.yaml
-sed -i 's|frontend:[0-9]*|frontend:1|' Kubernetes-Manifests-file/Frontend/deployment.yaml
-
-kubectl apply -f Kubernetes-Manifests-file/Backend/
-kubectl apply -f Kubernetes-Manifests-file/Frontend/
-kubectl apply -f Kubernetes-Manifests-file/ingress.yaml
-```
-
-### 5.4 Push to Git (CRITICAL — Before ArgoCD)
-
-```bash
-git add -A
-git commit -m "fix: set ECR image paths"
-git push origin main
-```
-
-> ⚠️ **Do this BEFORE Phase 6.** If ArgoCD syncs before you push, it overwrites working deployments with placeholder values.
-
-Verify:
-```bash
-kubectl get pods -n three-tier
-# All 4 pods should be Running
-
-kubectl get ingress -n three-tier
-# ADDRESS should show ALB DNS name
-```
+Each build: SonarQube → Trivy → Docker build → ECR push → Helm values update → ArgoCD rollout.
+All 5 can run in parallel — they are independent.
 
 ---
 
-## Phase 6: ArgoCD & App-of-Apps
+## Accessing the Platform
 
-### 6.1 Install ArgoCD
+All URLs are live once the infrastructure pipeline completes and DNS propagates (~5 min).
 
-```bash
-kubectl apply -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
-  --server-side --force-conflicts
+| Service | URL | Credentials |
+|---|---|---|
+| **NimbusRetail Website** | `http://platinum-consults.com` | — |
+| **Grafana** | `http://grafana.platinum-consults.com` | admin / (retrieve: `aws secretsmanager get-secret-value --secret-id nimbus-cluster/grafana/admin-password --query SecretString --output text`) |
+| **Prometheus** | `http://prometheus.platinum-consults.com` | — |
+| **ArgoCD** | `https://<argocd-lb>` (printed in pipeline output) | admin / (printed in pipeline) |
+| **Jenkins** | `http://<JENKINS_IP>:8080` | admin / your chosen password |
+| **SonarQube** | `http://<JENKINS_IP>:9000` | admin / SonarAdmin2026! |
 
-kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+> **ArgoCD URL:** The pipeline prints it at the end of the Install ArgoCD stage.
+> You can also retrieve it any time:
+> ```bash
+> kubectl get svc argocd-server -n argocd
+> # Copy the EXTERNAL-IP column value → https://<that-value>
+> # Accept the self-signed certificate warning in the browser
+> ```
 
-# Wait 60 seconds, then get credentials
-sleep 60
-kubectl get secret argocd-initial-admin-secret -n argocd \
-  -o jsonpath="{.data.password}" | base64 -d && echo
-kubectl get svc argocd-server -n argocd
-```
-
-### 6.2 Connect Repository
-
-Open ArgoCD UI (`https://<EXTERNAL-IP>`), login as admin, then:
-Settings → Repositories → Connect Repo Using HTTPS:
-- URL: `https://github.com/ibrahim-2010/cloud-native-eks.git`
-- Username: your GitHub username
-- Password: your GitHub PAT
-
-### 6.3 Deploy All Apps (One Command)
-
-```bash
-kubectl apply -f argocd/app-of-apps.yaml
-```
-
-**This creates 5 child applications automatically:**
-- `three-tier-database` — PostgreSQL + Redis
-- `three-tier-backend` — API deployment
-- `three-tier-frontend` — Frontend deployment
-- `three-tier-ingress` — ALB ingress with ExternalDNS
-- `monitoring-ingress` — Grafana ALB with ExternalDNS subdomain
-
-Verify:
-```bash
-kubectl get applications -n argocd
-# All should show Synced + Healthy
-```
-
-### 6.4 Apply Custom Monitoring Alerts
-
-```bash
-kubectl apply -f Kubernetes-Manifests-file/monitoring-alerts.yaml
-```
+> **DNS propagation:** `platinum-consults.com`, `grafana.platinum-consults.com`, and
+> `prometheus.platinum-consults.com` are managed automatically by ExternalDNS.
+> Allow 2–5 minutes after the pipeline finishes for DNS to resolve.
 
 ---
 
-## Phase 7: Run CI/CD Pipelines
+## Secret Management — No Hardcoded Credentials
 
-Go to Jenkins (`http://<jenkins-ip>:8080`) and click **Build Now** on both:
-- `three-tier-backend`
-- `three-tier-frontend`
+### Why hardcoded passwords are a production risk
 
-Both should pass all 9 stages:
-1. Cleanup → 2. Checkout → 3. SonarQube → 4. Quality Gate → 5. Trivy FS → 6. Docker Build → 7. Trivy Image → 8. ECR Push → 9. Update Manifest
+Early versions of this project had the Grafana admin password written directly in
+`EKS-Terraform/helm-monitoring.tf`:
 
-After Stage 9, ArgoCD detects the Git change and auto-deploys.
+```hcl
+# BEFORE — never do this in production
+adminPassword = "CloudNative2026!"
+```
+
+This is a critical security problem for four reasons:
+
+1. **Committed to git history** — the password is permanently visible in every clone,
+   fork, and `git log` of the repository, even after the line is removed.
+2. **Same password on every deployment** — every environment (dev, staging, prod) gets
+   identical credentials. Compromising one environment compromises all of them.
+3. **No rotation path** — changing the password requires a code change, a PR, a pipeline
+   run, and a Helm upgrade. Under incident conditions this is too slow.
+4. **Exposed in CI logs** — any Terraform plan or apply that prints values would leak the
+   password into Jenkins console output, which may be accessible to anyone with Jenkins
+   read access.
+
+### How this project handles it
+
+The Grafana password follows the same pattern as the RDS master password — generated
+randomly by Terraform and stored in AWS Secrets Manager:
+
+```hcl
+resource "random_password" "grafana" {
+  length  = 24
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "grafana_password" {
+  name                    = "${var.cluster_name}/grafana/admin-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_password" {
+  secret_id     = aws_secretsmanager_secret.grafana_password.id
+  secret_string = random_password.grafana.result
+}
+```
+
+The Helm release then references the Terraform resource directly — the password never
+appears as a string in any file:
+
+```hcl
+adminPassword = random_password.grafana.result
+```
+
+### Secrets stored in AWS Secrets Manager
+
+| Secret path | Contents | Created by |
+|---|---|---|
+| `nimbus-cluster/rds/master-password` | RDS PostgreSQL master password | Terraform (`rds.tf`) |
+| `nimbus-cluster/grafana/admin-password` | Grafana admin password | Terraform (`helm-monitoring.tf`) |
+| `nimbus-cluster/nimbus-secrets` | JWT_SECRET, DATABASE_URL, REDIS_URL (auth/cart/order) | Jenkins pipeline |
+| `nimbus-cluster/nimbus-catalog-secrets` | DATABASE_URL, REDIS_URL (catalog, asyncpg format) | Jenkins pipeline |
+
+### Retrieving the Grafana password
+
+The infrastructure pipeline prints it automatically in the success banner. You can also
+retrieve it any time:
+
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id nimbus-cluster/grafana/admin-password \
+  --query SecretString \
+  --output text \
+  --region us-east-1
+```
+
+### Rotating the Grafana password
+
+```bash
+# Generate a new password and update Secrets Manager
+NEW_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(24)))")
+aws secretsmanager put-secret-value \
+  --secret-id nimbus-cluster/grafana/admin-password \
+  --secret-string "$NEW_PASS" \
+  --region us-east-1
+
+# Apply the new value to the running Grafana instance
+cd /c/Users/19122/nimbus-retail-platform/EKS-Terraform
+terraform apply -var-file="nimbus.tfvars" -target=helm_release.monitoring -auto-approve
+```
+
+> **Note:** `terraform apply -target=helm_release.monitoring` will detect that
+> `random_password.grafana.result` has not changed (it's stored in Terraform state),
+> so the manual Secrets Manager update above is required for true rotation. For
+> fully automated rotation, configure AWS Secrets Manager rotation with a Lambda
+> and trigger a Helm upgrade from the rotation Lambda.
 
 ---
 
-## Phase 8: Verify Everything
+## Final Verification
 
-### Application
-- Open `http://platinum-consults.com` — should show Cloud Native Task Manager with green health dots
-
-### Grafana
-- Open `http://grafana.platinum-consults.com` — login: admin / CloudNative2026!
-- Go to Dashboards → Browse → "Kubernetes / Compute Resources / Namespace (Pods)" → select `three-tier`
-
-### DNS (auto-created by ExternalDNS)
+Run these from your local machine after configuring kubectl:
 ```bash
-aws route53 list-resource-record-sets --hosted-zone-id <ZONE_ID> \
-  --query "ResourceRecordSets[?Type=='A'].[Name]" --output text
-# Should show: platinum-consults.com AND grafana.platinum-consults.com
+aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
 ```
 
-### Full Status
 ```bash
-kubectl get pods -n three-tier
-kubectl get pods -n monitoring
-kubectl get ingress -n three-tier
-kubectl get ingress -n monitoring
-kubectl get applications -n argocd
+kubectl get nodes                          # 2 nodes Ready
+kubectl get pods -n nimbus                 # 5 services + frontend Running
+kubectl get pods -n kafka                  # 3 nimbus-kafka-dual-role-* Running
+kubectl get pods -n monitoring             # prometheus, grafana, loki, tempo Running
+kubectl get applications -n argocd         # all Synced + Healthy
+kubectl get externalsecrets -n nimbus      # READY=True, STATUS=SecretSynced
+kubectl get networkpolicies -n nimbus      # 7 policies listed
+kubectl get clusterpolicies                # 4 Kyverno policies listed
+
+# Smoke test
+kubectl exec -n nimbus deploy/auth-service -- wget -qO- http://localhost:3001/healthz
+# Expected: {"status":"ok"}
 ```
-
----
-
-## Cleanup
-
-### Automated Teardown
-
-```bash
-bash destroy.sh
-```
-
-### Manual Teardown (if destroy.sh fails)
-
-```bash
-# 1. ArgoCD apps
-kubectl delete applications --all -n argocd
-
-# 2. ArgoCD itself
-kubectl delete -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# 3. EKS infrastructure
-cd EKS-Terraform && terraform destroy -auto-approve
-
-# 4. ECR repos
-aws ecr delete-repository --repository-name frontend --region us-east-1 --force
-aws ecr delete-repository --repository-name backend --region us-east-1 --force
-
-# 5. Jenkins server
-cd Jenkins-Server-TF && terraform destroy -auto-approve
-
-# 6. Manual check: EC2, EBS, ELBs, CloudFormation, Elastic IPs, NAT Gateways
-```
-
-> **S3 bucket and DynamoDB table are NOT deleted** — they persist between deployments and cost almost nothing. Delete them only when completely done with the project.
 
 ---
 
 ## Troubleshooting
 
-### Quick Reference
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `nimbus-infrastructure` fails at Terraform Init | Provider download timeout | Re-run the job — transient network issue |
+| `nimbus-infrastructure` fails at Terraform Apply | IAM permission issue | Check Jenkins EC2 instance role has all 8 policies |
+| ArgoCD app stuck `OutOfSync` | Kyverno blocking | `kubectl get policyreport -n nimbus` |
+| ESO `SecretSyncedError` | Secrets not in Secrets Manager | Check pipeline Populate Secrets Manager stage output |
+| Pod `ImagePullBackOff` | Jenkins build not run yet | Trigger that service's build job |
+| Pod crash — `secret not found` | ESO hasn't synced yet | `kubectl annotate externalsecret nimbus-secrets -n nimbus force-sync=$(date +%s) --overwrite` |
+| Kafka pods pending | EBS volume not provisioned | `kubectl describe pod -n kafka` — check StorageClass |
+| ArgoCD password not shown | Secret already rotated | `kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' \| base64 -d` |
+| Register returns `relation "auth.users" does not exist` | Database Initialize stage failed or was skipped | Re-run the db-init Job manually: `kubectl delete job db-init -n nimbus --ignore-not-found && kubectl apply -f <job-yaml>` |
+| Services 0/1, logs show `no encryption` | DATABASE_URL missing `?sslmode=require` | Check `nimbus-cluster/nimbus-secrets` in Secrets Manager — URL must end with `/nimbus?sslmode=require` |
 
-| Problem | Check | Fix |
-|---------|-------|-----|
-| `eks:DescribeClusterVersions` denied | IAM inline policy | Already in Terraform — shouldn't occur |
-| Cached credentials | `aws sts get-caller-identity` | Export `AWS_ACCESS_KEY_ID/SECRET` |
-| `npm ci` fails | Dockerfile | Change to `npm install --omit=dev` |
-| ArgoCD CRD too large | Always happens | Use `--server-side --force-conflicts` |
-| Pods stuck Pending | `kubectl describe pod` | Check ENI pod limits, use t3.xlarge |
-| vCPU limit exceeded | `aws service-quotas get-service-quota` | Request increase to 20 |
-| Quality Gate timeout | SonarQube webhooks | Check webhook uses private IP |
-| sonar-scanner not found | `which sonar-scanner` | Manual install from `/tmp` |
-| ALB not provisioning | `kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller` | Check IAM policy |
-| ImagePullBackOff | `kubectl describe pod` | Check image tag matches ECR |
-| Ingress ADDRESS empty | Controller running? | Delete and reapply ingress |
-| JCasC boot failure | `journalctl -u jenkins` | Check YAML syntax, remove unsupported attributes |
-| Plugin mirrors down | `curl -s -o /dev/null -w "%{http_code}" https://updates.jenkins.io/latest/configuration-as-code.hpi` | Wait for 200, retry |
-| Grafana wrong datasource | Check configmap names | Delete old `monitoring-stack-*` configmaps |
+---
 
-### Checking Jenkins Plugin Mirror Status
+## Teardown (when done testing)
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" https://updates.jenkins.io/latest/configuration-as-code.hpi
-# 200 or 302 = mirrors are up
-# 503 = mirrors are down, wait and retry
+cd /c/Users/19122/nimbus-retail-platform
+bash destroy.sh
 ```
 
-### Checking Logs
-
+Takes ~15 min. Runs 11 phases in dependency order. After it finishes:
 ```bash
-# Jenkins
-journalctl -u jenkins.service --no-pager | grep -i "SEVERE\|error" | tail -20
+aws eks list-clusters --region us-east-1                          # expect []
+aws ec2 describe-instances --region us-east-1 \
+  --filters "Name=instance-state-name,Values=running,stopped" \
+  --query "Reservations[].Instances[].InstanceId"                 # expect []
+```
 
-# ALB Controller
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=20
-
-# ArgoCD
-kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=20
-
-# User data script
-cat /var/log/tools-install.log
+Delete S3 + DynamoDB only when done with the project permanently:
+```bash
+aws s3 rm s3://ibrahim-cloud-native-tf-state --recursive
+aws s3api delete-bucket --bucket ibrahim-cloud-native-tf-state
+aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-east-1
 ```
 
 ---
 
-*Ibrahim | [github.com/ibrahim-2010/cloud-native-eks](https://github.com/ibrahim-2010/cloud-native-eks) | [platinum-consults.com](http://platinum-consults.com)*
+## Quick Reference
+
+| What | Where |
+|---|---|
+| Jenkins UI | `http://<JENKINS_IP>:8080` |
+| SonarQube UI | `http://<JENKINS_IP>:9000` (admin / SonarAdmin2026!) |
+| NimbusRetail Website | `http://platinum-consults.com` |
+| Grafana | `http://grafana.platinum-consults.com` (admin / (retrieve: `aws secretsmanager get-secret-value --secret-id nimbus-cluster/grafana/admin-password --query SecretString --output text`)) |
+| Prometheus | `http://prometheus.platinum-consults.com` |
+| ArgoCD | `https://$(kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')` |
+| Infrastructure pipeline | `nimbus-infrastructure` job in Jenkins |
+| Service pipelines | `nimbus-auth/catalog/cart/order/notification-service` |
+| Platform repo | `C:\Users\19122\nimbus-retail-platform` |
+| App repo | `C:\Users\19122\Desktop\nimbus-retail-starter` |
+| Runbook | `nimbus-retail-platform/docs/RUNBOOK.md` |
+| Full setup guide | `nimbus-retail-starter/docs/SETUP_GUIDE.md` |

@@ -24,7 +24,7 @@ data "aws_ami" "ubuntu" {
 #  Security Group
 # ──────────────────────────────────────────────
 resource "aws_security_group" "jenkins_sg" {
-  name        = "jenkins-cloud-native-sg"
+  name        = "jenkins-nimbus-sg"
   description = "Allow SSH, Jenkins, SonarQube, and app traffic"
 
   # SSH
@@ -63,8 +63,8 @@ resource "aws_security_group" "jenkins_sg" {
   }
 
   tags = {
-    Name    = "Jenkins-Cloud-Native-SG"
-    Project = "cloud-native-eks"
+    Name    = "Jenkins-Nimbus-SG"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -72,7 +72,7 @@ resource "aws_security_group" "jenkins_sg" {
 #  IAM Role & Instance Profile
 # ──────────────────────────────────────────────
 resource "aws_iam_role" "jenkins_role" {
-  name = "jenkins-cloud-native-role"
+  name = "jenkins-nimbus-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -88,8 +88,8 @@ resource "aws_iam_role" "jenkins_role" {
   })
 
   tags = {
-    Name    = "Jenkins-Cloud-Native-Role"
-    Project = "cloud-native-eks"
+    Name    = "Jenkins-Nimbus-Role"
+    Project = "nimbus-retail-platform"
   }
 }
 
@@ -144,7 +144,7 @@ resource "aws_iam_role_policy" "nimbus_infra_access" {
 }
 
 resource "aws_iam_instance_profile" "jenkins_profile" {
-  name = "jenkins-cloud-native-profile"
+  name = "jenkins-nimbus-profile"
   role = aws_iam_role.jenkins_role.name
 }
 
@@ -166,7 +166,7 @@ resource "aws_instance" "jenkins" {
   }
 
   tags = {
-    Name    = "Jenkins-Cloud-Native"
-    Project = "cloud-native-eks"
+    Name    = "Jenkins-Nimbus"
+    Project = "nimbus-retail-platform"
   }
 }

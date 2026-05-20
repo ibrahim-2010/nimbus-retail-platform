@@ -33,7 +33,7 @@ pipeline {
         AWS_ACCOUNT_ID     = credentials('ACCOUNT_ID')
         AWS_DEFAULT_REGION = 'us-east-1'
         APP_REPO           = 'https://github.com/ibrahim-2010/nimbus-retail-starter.git'
-        PLATFORM_REPO      = 'https://github.com/ibrahim-2010/cloud-native-eks.git'
+        PLATFORM_REPO      = 'https://github.com/ibrahim-2010/nimbus-retail-platform.git'
     }
 
     stages {
@@ -140,7 +140,7 @@ pipeline {
             steps {
                 sh """
                     rm -rf platform-repo
-                    git clone https://${GITHUB_TOKEN}@github.com/ibrahim-2010/cloud-native-eks.git platform-repo
+                    git clone https://${GITHUB_TOKEN}@github.com/ibrahim-2010/nimbus-retail-platform.git platform-repo
                     cd platform-repo
 
                     sed -i 's|  tag: ".*"|  tag: "${BUILD_NUMBER}"|' \
