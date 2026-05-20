@@ -1,4 +1,4 @@
-# NimbusRetail — Operational Runbook
+# NimbusRetail – Operational Runbook
 
 **Cluster:** nimbus-cluster (us-east-1)
 **Namespace:** nimbus (application), kafka, monitoring, argocd, kyverno
@@ -36,7 +36,7 @@ kubectl get pods -n nimbus
 
 ## 2. Roll Back a Deployment
 
-**Option A — ArgoCD (recommended):** revert the image tag commit in the platform repo.
+**Option A – ArgoCD (recommended):** revert the image tag commit in the platform repo.
 
 ```bash
 cd nimbus-retail-platform
@@ -46,7 +46,7 @@ git push origin main
 # ArgoCD auto-syncs within 3 minutes
 ```
 
-**Option B — Kubernetes (faster, bypasses GitOps):**
+**Option B – Kubernetes (faster, bypasses GitOps):**
 ```bash
 kubectl rollout undo deploy/auth-service -n nimbus
 kubectl rollout status deploy/auth-service -n nimbus
@@ -98,9 +98,9 @@ kubectl scale deploy/catalog-service --replicas=3 -n nimbus
 
 **Permanent scale (GitOps):** update `replicaCount` in `values-catalog.yaml`, commit, push.
 
-**Enable HPA on notification-service** (currently disabled — Kafka consumer):
+**Enable HPA on notification-service** (currently disabled – Kafka consumer):
 Update `hpa.enabled: true` in `values-notification.yaml` and set appropriate metrics.
-Note: CPU-based HPA is not appropriate for Kafka consumers — use KEDA with
+Note: CPU-based HPA is not appropriate for Kafka consumers – use KEDA with
 `KafkaLag` metric instead.
 
 ---
@@ -195,7 +195,7 @@ kubectl logs -n kafka -l strimzi.io/cluster=nimbus-kafka --tail=50
 kubectl get nodes
 kubectl top nodes
 
-# All pods — anything not Running?
+# All pods – anything not Running?
 kubectl get pods -A | grep -v Running | grep -v Completed
 
 # ArgoCD sync status
@@ -207,7 +207,7 @@ kubectl get policyreport -n nimbus -o jsonpath='{.results[*].message}'
 # ESO sync status
 kubectl get externalsecrets -n nimbus
 
-# Prometheus targets — any DOWN?
+# Prometheus targets – any DOWN?
 kubectl port-forward svc/monitoring-kube-prometheus-prometheus -n monitoring 9090:9090
 # Open http://localhost:9090/targets
 ```
@@ -266,7 +266,7 @@ bash destroy.sh
 ```
 
 The script runs in 10 phases. Full teardown takes ~15 minutes. The S3 bucket and
-DynamoDB table are preserved intentionally — delete them manually only if done
+DynamoDB table are preserved intentionally – delete them manually only if done
 with the project:
 
 ```bash
@@ -280,11 +280,11 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 
 | Error | Where seen | Fix |
 |---|---|---|
-| `no kind "ExternalSecret" is registered` | kubectl apply | ESO not yet deployed — run `terraform apply` first |
+| `no kind "ExternalSecret" is registered` | kubectl apply | ESO not yet deployed – run `terraform apply` first |
 | `SecretSyncedError: secret does not exist` | ESO logs | Create the secret in Secrets Manager first |
-| `This server does not host this topic-partition` | notification-service | Transient Kafka startup race — `restart: on-failure` handles it |
-| `dependency kafka failed to start` | docker-compose | Kafka healthcheck path wrong — use `/opt/kafka/bin/kafka-topics.sh` |
-| `bitnami/kafka:3.7 not found` | docker-compose pull | Image removed from Docker Hub — use `apache/kafka:3.7.2` |
+| `This server does not host this topic-partition` | notification-service | Transient Kafka startup race – `restart: on-failure` handles it |
+| `dependency kafka failed to start` | docker-compose | Kafka healthcheck path wrong – use `/opt/kafka/bin/kafka-topics.sh` |
+| `bitnami/kafka:3.7 not found` | docker-compose pull | Image removed from Docker Hub – use `apache/kafka:3.7.2` |
 | `jq: command not found` | Git Bash on Windows | Replace `jq -r .field` with `python -c "import sys,json; print(json.load(sys.stdin)['field'])"` |
-| `GroupCoordinator not available` | notification-service log | Transient — KafkaJS retries automatically, not a crash |
+| `GroupCoordinator not available` | notification-service log | Transient – KafkaJS retries automatically, not a crash |
 | Jenkins Quality Gate timeout | Jenkins pipeline | Check SonarQube webhook uses private IP, not localhost |

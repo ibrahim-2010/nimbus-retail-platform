@@ -14,13 +14,13 @@ Secrets. Options evaluated:
 
 | Option | Description |
 |---|---|
-| A | `kubectl create secret` — manual, run once per deployment |
-| B | Sealed Secrets — encrypted secrets committed to Git |
+| A | `kubectl create secret` – manual, run once per deployment |
+| B | Sealed Secrets – encrypted secrets committed to Git |
 | C | External Secrets Operator (ESO) + AWS Secrets Manager |
 
 ## Decision
 
-**Option C** — ESO with AWS Secrets Manager, using IRSA for authentication.
+**Option C** – ESO with AWS Secrets Manager, using IRSA for authentication.
 
 ## Rationale
 
@@ -45,7 +45,7 @@ re-encrypting and committing. The encrypted blob is not auditable.
 **Positive:**
 - Secret rotation does not require any Kubernetes operations
 - Full AWS CloudTrail audit trail for every `GetSecretValue` call
-- IRSA limits blast radius — ESO can only read secrets under the cluster prefix
+- IRSA limits blast radius – ESO can only read secrets under the cluster prefix
 - `ExternalSecret` CRs are version-controlled in Git (no sensitive values in the YAML)
 
 **Negative:**

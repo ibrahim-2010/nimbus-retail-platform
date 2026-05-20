@@ -12,13 +12,13 @@ The platform needs centralised log aggregation for the five Nimbus services. Opt
 
 | Option | Description |
 |---|---|
-| A | AWS CloudWatch Logs — managed, native AWS |
-| B | Grafana Loki + Promtail — open-source, runs in-cluster |
-| C | Elasticsearch/OpenSearch — powerful but heavyweight |
+| A | AWS CloudWatch Logs – managed, native AWS |
+| B | Grafana Loki + Promtail – open-source, runs in-cluster |
+| C | Elasticsearch/OpenSearch – powerful but heavyweight |
 
 ## Decision
 
-**Option B** — Grafana Loki with Promtail as the log shipper.
+**Option B** – Grafana Loki with Promtail as the log shipper.
 
 ## Rationale
 
@@ -29,7 +29,7 @@ requires switching to the CloudWatch console, breaking the single-pane-of-glass
 experience in Grafana.
 
 **Loki** runs inside the EKS cluster at no additional AWS cost. Promtail runs as a
-DaemonSet and tails all container log files automatically — zero configuration
+DaemonSet and tails all container log files automatically – zero configuration
 required in the application services. Loki integrates natively with Grafana as a
 datasource, enabling correlated metrics + logs in the same dashboard panel.
 
@@ -43,12 +43,12 @@ single Helm release.
 
 **Positive:**
 - Zero additional AWS cost
-- Promtail auto-discovers all pod logs — no per-service config
+- Promtail auto-discovers all pod logs – no per-service config
 - LogQL queries available in Grafana Explore alongside Prometheus metrics
 - Single observability UI (Grafana) for metrics, logs, and traces
 
 **Negative:**
-- Loki uses ephemeral storage (no persistence) in this deployment — logs are lost on
+- Loki uses ephemeral storage (no persistence) in this deployment – logs are lost on
   pod restart. Enabling persistence requires an EBS PVC.
 - Loki is not a replacement for a full-text search engine; complex log queries
   are slower than Elasticsearch

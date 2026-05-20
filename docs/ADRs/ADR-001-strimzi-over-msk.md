@@ -34,7 +34,7 @@ Strimzi as an approved approach for Kafka.
 
 **Cloud-native fit:** Strimzi is CNCF-graduated and uses Kubernetes-native CRDs
 (`Kafka`, `KafkaNodePool`). The cluster CR is version-controlled in Git and
-deployed by ArgoCD — consistent with the GitOps pattern used for all other
+deployed by ArgoCD – consistent with the GitOps pattern used for all other
 workloads.
 
 **KRaft mode:** Strimzi 0.42+ supports KRaft (no ZooKeeper), which matches the

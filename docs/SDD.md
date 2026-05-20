@@ -1,4 +1,4 @@
-# NimbusRetail — Solution Design Document
+# NimbusRetail – Solution Design Document
 
 **Project:** NimbusRetail Platform on AWS EKS
 **Author:** Ibrahim Jinadu
@@ -17,11 +17,11 @@ a real platform team would build around it.
 
 The platform delivers:
 - **Zero-downtime deployments** via ArgoCD GitOps with Helm rolling updates
-- **Automated CI/CD** with Jenkins — build, scan, push to ECR, update Helm values
-- **Full observability** — Prometheus metrics, Loki logs, Tempo traces, Grafana dashboards
-- **Zero-trust networking** — Kubernetes NetworkPolicies with default-deny in the application namespace
-- **Secret management** — External Secrets Operator pulling from AWS Secrets Manager via IRSA
-- **Admission control** — Kyverno blocking privileged containers and enforcing resource limits
+- **Automated CI/CD** with Jenkins – build, scan, push to ECR, update Helm values
+- **Full observability** – Prometheus metrics, Loki logs, Tempo traces, Grafana dashboards
+- **Zero-trust networking** – Kubernetes NetworkPolicies with default-deny in the application namespace
+- **Secret management** – External Secrets Operator pulling from AWS Secrets Manager via IRSA
+- **Admission control** – Kyverno blocking privileged containers and enforcing resource limits
 
 ---
 
@@ -80,7 +80,7 @@ flowchart TB
             end
 
             subgraph PrivateSubnets["Private Subnets (us-east-1a/b)"]
-                subgraph EKS["EKS Cluster — nimbus-cluster (k8s 1.31)"]
+                subgraph EKS["EKS Cluster – nimbus-cluster (k8s 1.31)"]
                     subgraph NimbusNS["namespace: nimbus"]
                         Auth[auth-service]
                         Catalog[catalog-service]
@@ -194,9 +194,9 @@ variables, and secret references. This avoids chart duplication while keeping
 each service independently configurable.
 
 Key templates:
-- `deployment.yaml` — supports `env` (plain) and `envFromSecrets` (secret refs)
-- `service.yaml` — ClusterIP with named port `http` (required by ServiceMonitor)
-- `hpa.yaml` — optional HPA (disabled for notification-service — Kafka consumer)
+- `deployment.yaml` – supports `env` (plain) and `envFromSecrets` (secret refs)
+- `service.yaml` – ClusterIP with named port `http` (required by ServiceMonitor)
+- `hpa.yaml` – optional HPA (disabled for notification-service – Kafka consumer)
 
 ---
 
@@ -218,7 +218,7 @@ shipping to Loki. No SDK changes required in the application services.
 ### 6.3 Traces
 
 Tempo is deployed and ready to receive OTLP traces. Services require OpenTelemetry
-SDK instrumentation to emit spans — this is a future enhancement.
+SDK instrumentation to emit spans – this is a future enhancement.
 
 ### 6.4 Alerts
 
@@ -235,7 +235,7 @@ pressure, and Kafka consumer lag.
 | Layer | Mechanism |
 |---|---|
 | AWS perimeter | Security groups on RDS, ElastiCache (allow only EKS cluster SG) |
-| Pod-to-pod | 7 NetworkPolicies — default-deny-all with explicit allows |
+| Pod-to-pod | 7 NetworkPolicies – default-deny-all with explicit allows |
 | External traffic | ALB security group + WAF (future) |
 
 ### 7.2 Identity and Secrets
@@ -276,8 +276,8 @@ Full rationale for each decision: see `docs/ADRs/`.
 | Item | Detail |
 |---|---|
 | Tempo instrumentation | Services need OpenTelemetry SDK to emit traces |
-| Kyverno audit policies | `disallow-latest-tag` and `require-app-label` are in audit mode — switch to enforce once all workloads comply |
-| Single NAT Gateway | Cost optimisation; adds risk — a single-AZ failure takes down all outbound traffic |
+| Kyverno audit policies | `disallow-latest-tag` and `require-app-label` are in audit mode – switch to enforce once all workloads comply |
+| Single NAT Gateway | Cost optimisation; adds risk – a single-AZ failure takes down all outbound traffic |
 | RDS Multi-AZ | Disabled for cost; enable for production |
-| TLS on Kafka | Strimzi uses PLAINTEXT — enable TLS in production |
+| TLS on Kafka | Strimzi uses PLAINTEXT – enable TLS in production |
 | Alertmanager routing | Alerts fire to Alertmanager but no receiver (Slack/PagerDuty) is configured |

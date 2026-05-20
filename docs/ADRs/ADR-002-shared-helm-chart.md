@@ -18,7 +18,7 @@ Five NimbusRetail microservices need Kubernetes packaging. Options considered:
 
 ## Decision
 
-**Option B** — a single chart at `helm/nimbus-service/` with five
+**Option B** – a single chart at `helm/nimbus-service/` with five
 `values-<service>.yaml` overrides.
 
 ## Rationale
@@ -32,7 +32,7 @@ Per-service values files (`values-auth.yaml`, `values-catalog.yaml`, etc.) provi
 full customisation of image repository, port, environment variables, secret references,
 and HPA settings without duplicating template code.
 
-ArgoCD supports this pattern natively — each child app references the same `path`
+ArgoCD supports this pattern natively – each child app references the same `path`
 with a different `helm.valueFiles` entry.
 
 Option C (Kustomize) was rejected because the team is more familiar with Helm and

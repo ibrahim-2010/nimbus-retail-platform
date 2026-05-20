@@ -1,4 +1,4 @@
-# NimbusRetail EKS Deployment — Issues, Challenges & Solutions Report
+# NimbusRetail EKS Deployment – Issues, Challenges & Solutions Report
 
 **Project:** NimbusRetail Cloud-Native Microservices Platform  
 **Stack:** AWS EKS 1.31 · Terraform · Helm · ArgoCD · Jenkins · Strimzi Kafka · ESO · Kyverno  
@@ -6,7 +6,7 @@
 
 ---
 
-## Issue 1 — Only 2 Jenkins Jobs Instead of 8
+## Issue 1 – Only 2 Jenkins Jobs Instead of 8
 
 **Symptom:**  
 After running `setup-jcasc.sh`, Jenkins showed only 2 jobs (`three-tier-backend`, `three-tier-frontend`) instead of the expected 8.
@@ -27,10 +27,10 @@ sudo chown jenkins:jenkins /var/lib/jenkins/casc_configs/jenkins.yaml
 
 ---
 
-## Issue 2 — Kubernetes Provider Connecting to localhost:80
+## Issue 2 – Kubernetes Provider Connecting to localhost:80
 
 **Symptom:**  
-Terraform Apply failed with `connection refused` — the Kubernetes/Helm provider was connecting to `localhost:80` instead of the EKS cluster endpoint.
+Terraform Apply failed with `connection refused` – the Kubernetes/Helm provider was connecting to `localhost:80` instead of the EKS cluster endpoint.
 
 **Root Cause:**  
 Terraform evaluates provider configuration before resources exist. `aws_eks_cluster.main.endpoint` is empty until the cluster is created, so the provider defaulted to `localhost`.
@@ -51,7 +51,7 @@ sh 'terraform apply -auto-approve'
 
 ---
 
-## Issue 3 — AccessDenied for RDS and ElastiCache
+## Issue 3 – AccessDenied for RDS and ElastiCache
 
 **Symptom:**  
 Infrastructure pipeline failed with `elasticache:CreateCacheSubnetGroup` and `rds:CreateDBSubnetGroup` AccessDenied errors.
@@ -76,7 +76,7 @@ resource "aws_iam_role_policy" "nimbus_infra_access" {
 
 ---
 
-## Issue 4 — Wrong Cluster Name (cloud-native-cluster vs nimbus-cluster)
+## Issue 4 – Wrong Cluster Name (cloud-native-cluster vs nimbus-cluster)
 
 **Symptom:**  
 Terraform created a cluster named `cloud-native-cluster` instead of `nimbus-cluster`, causing all subsequent `kubectl` and ArgoCD operations to fail.
@@ -95,7 +95,7 @@ Added an explicit exception to `.gitignore`:
 
 ---
 
-## Issue 5 — ESO Error: namespace "nimbus" Not Found
+## Issue 5 – ESO Error: namespace "nimbus" Not Found
 
 **Symptom:**  
 External Secrets Operator failed to create SecretStores because the `nimbus` namespace did not exist at deploy time.
@@ -116,7 +116,7 @@ resource "kubernetes_namespace" "nimbus" {
 
 ---
 
-## Issue 6 — Kyverno ALB Webhook Errors (6 Errors)
+## Issue 6 – Kyverno ALB Webhook Errors (6 Errors)
 
 **Symptom:**  
 Kyverno installation failed with 6 webhook admission errors during Helm install.
@@ -131,7 +131,7 @@ Added `depends_on = [helm_release.alb_controller]` to Kyverno's Helm release so 
 
 ---
 
-## Issue 7 — nimbus-security ArgoCD App OutOfSync
+## Issue 7 – nimbus-security ArgoCD App OutOfSync
 
 **Symptom:**  
 ArgoCD showed `nimbus-security` as OutOfSync/Missing. `ExternalSecret` and `SecretStore` resources failed to apply.
@@ -153,7 +153,7 @@ apiVersion: external-secrets.io/v1
 
 ---
 
-## Issue 8 — Kafka Brokers All Pending (PVCs Unbound)
+## Issue 8 – Kafka Brokers All Pending (PVCs Unbound)
 
 **Symptom:**  
 All 3 Kafka broker pods were stuck in `Pending` state. PVCs showed `STATUS: Pending` with `STORAGECLASS: <unset>`.
@@ -181,7 +181,7 @@ Also added `class: gp3` to `kafka-cluster.yaml`.
 
 ---
 
-## Issue 9 — Services 0/1 Running (RDS SSL Errors)
+## Issue 9 – Services 0/1 Running (RDS SSL Errors)
 
 **Symptom:**  
 Auth, cart, and order services were `0/1 Running`. Readiness probe returning 503. Service logs showed:
@@ -197,7 +197,7 @@ self-signed certificate in certificate chain
 ```
 
 **Root Cause:**  
-- RDS enforces SSL by default — Node.js `pg` module doesn't use SSL unless told to.
+- RDS enforces SSL by default – Node.js `pg` module doesn't use SSL unless told to.
 - After adding `?sslmode=require`, Node.js rejected the RDS self-signed certificate.
 
 **Fix (Step 1):** Updated `DATABASE_URL` in Secrets Manager to include `?sslmode=require`.  
@@ -211,7 +211,7 @@ self-signed certificate in certificate chain
 
 ---
 
-## Issue 10 — Grafana CrashLoopBackOff
+## Issue 10 – Grafana CrashLoopBackOff
 
 **Symptom:**  
 Grafana pod (2/3) was in `CrashLoopBackOff`. Logs showed:
@@ -238,13 +238,13 @@ sidecar = {
 
 ---
 
-## Issue 11 — ExternalDNS Conflict Between Two Ingresses
+## Issue 11 – ExternalDNS Conflict Between Two Ingresses
 
 **Symptom:**  
 `platinum-consults.com` kept pointing to the old three-tier ALB instead of the NimbusRetail ALB. ExternalDNS was upserting the wrong ALB every 60 seconds.
 
 **Root Cause:**  
-Both the three-tier ingress and the nimbus ingress claimed `platinum-consults.com` — the three-tier ingress had it in both the `external-dns` annotation AND `spec.rules[].host`. ExternalDNS read the host from the spec even after the annotation was removed.
+Both the three-tier ingress and the nimbus ingress claimed `platinum-consults.com` – the three-tier ingress had it in both the `external-dns` annotation AND `spec.rules[].host`. ExternalDNS read the host from the spec even after the annotation was removed.
 
 **Fix:**  
 Removed `host: platinum-consults.com` from the three-tier ingress spec in Git so ArgoCD would apply the change and ExternalDNS would stop claiming the hostname:
@@ -253,13 +253,13 @@ Removed `host: platinum-consults.com` from the three-tier ingress spec in Git so
 
 ---
 
-## Issue 12 — ALB 503 on All API Calls
+## Issue 12 – ALB 503 on All API Calls
 
 **Symptom:**  
 All API calls from the NimbusRetail frontend returned `503 Service Temporarily Unavailable`.
 
 **Root Cause:**  
-The ALB health check path was set to `/` (the nginx default), but backend microservices don't expose a `/` endpoint — only `/healthz`, `/readyz`, and `/metrics`. ALB marked all backend target groups as unhealthy.
+The ALB health check path was set to `/` (the nginx default), but backend microservices don't expose a `/` endpoint – only `/healthz`, `/readyz`, and `/metrics`. ALB marked all backend target groups as unhealthy.
 
 **Fix:**  
 Changed health check path to `/healthz` and added a custom nginx config to the frontend that responds 200 to `/healthz`:
@@ -281,7 +281,7 @@ location /healthz {
 
 ---
 
-## Issue 13 — Database Schemas Not Initialized on RDS
+## Issue 13 – Database Schemas Not Initialized on RDS
 
 **Symptom:**  
 Auth service returned `{"error":"internal error"}` on register. Logs showed:
@@ -291,7 +291,7 @@ relation "auth.users" does not exist
 ```
 
 **Root Cause:**  
-The `scripts/init-db.sql` in the app repo only runs automatically via Docker's `docker-entrypoint-initdb.d` mechanism in docker-compose. There was no equivalent step for EKS — the RDS database existed but had no schemas or tables.
+The `scripts/init-db.sql` in the app repo only runs automatically via Docker's `docker-entrypoint-initdb.d` mechanism in docker-compose. There was no equivalent step for EKS – the RDS database existed but had no schemas or tables.
 
 **Fix:**  
 Ran a one-time Kubernetes Job using the `nimbus-secrets` DATABASE_URL to execute the init SQL against RDS:
@@ -319,7 +319,7 @@ spec:
 
 ---
 
-## Issue 14 — Kyverno Blocked Kubernetes Job (No Resource Limits)
+## Issue 14 – Kyverno Blocked Kubernetes Job (No Resource Limits)
 
 **Symptom:**  
 ```

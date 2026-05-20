@@ -13,13 +13,13 @@ no privileged containers, mandatory resource limits, image tag discipline. Optio
 
 | Option | Description |
 |---|---|
-| A | OPA / Gatekeeper — Rego policies, CNCF graduated |
-| B | Kyverno — Kubernetes-native YAML policies, CNCF graduated |
-| C | Pod Security Standards (built-in) — namespace-level only |
+| A | OPA / Gatekeeper – Rego policies, CNCF graduated |
+| B | Kyverno – Kubernetes-native YAML policies, CNCF graduated |
+| C | Pod Security Standards (built-in) – namespace-level only |
 
 ## Decision
 
-**Option B** — Kyverno.
+**Option B** – Kyverno.
 
 ## Rationale
 
@@ -41,7 +41,7 @@ Kyverno's simpler authoring model is the deciding factor for this project.
 ## Consequences
 
 **Positive:**
-- Policies are readable YAML — reviewable in pull requests without Rego knowledge
+- Policies are readable YAML – reviewable in pull requests without Rego knowledge
 - `Audit` mode allows gradual policy rollout without breaking existing workloads
 - `PolicyReport` CRs provide a queryable violation log
 
