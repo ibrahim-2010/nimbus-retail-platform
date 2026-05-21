@@ -1,7 +1,7 @@
 # ADR-004: Kyverno over OPA/Gatekeeper for Admission Control
 
 **Status:** Accepted
-**Date:** 2026-05-14
+**Date:** 2026-05-19
 **Deciders:** Platform team
 
 ---

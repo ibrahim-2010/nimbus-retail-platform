@@ -1,7 +1,7 @@
 # ADR-003: External Secrets Operator over Manual Secret Management
 
 **Status:** Accepted
-**Date:** 2026-05-14
+**Date:** 2026-05-18
 **Deciders:** Platform team
 
 ---

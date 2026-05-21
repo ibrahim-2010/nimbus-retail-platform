@@ -1,7 +1,7 @@
 # ADR-005: Loki over AWS CloudWatch for Log Aggregation
 
 **Status:** Accepted
-**Date:** 2026-05-14
+**Date:** 2026-05-20
 **Deciders:** Platform team
 
 ---
