@@ -231,47 +231,68 @@ Every major technology choice is documented with the alternative considered and 
 ```
 nimbus-retail-platform/
 │
+├── Application-Code/               # Application source code
+│   ├── backend/                    # Node.js Express API (auth, cart, order, notification)
+│   │   ├── Dockerfile
+│   │   ├── server.js
+│   │   └── package.json
+│   └── frontend/                   # nginx static UI
+│       ├── Dockerfile
+│       ├── nginx.conf
+│       └── src/                    # React components
+│
 ├── EKS-Terraform/                  # Full EKS platform – IaC
 │   ├── main.tf                     # VPC, subnets, EKS cluster, node group, OIDC
+│   ├── variables.tf                # Input variables (cluster name, region, instance types)
+│   ├── outputs.tf                  # Cluster endpoint, RDS/Grafana secret ARNs, ECR URLs
+│   ├── backend.tf                  # Remote state – S3 + DynamoDB
 │   ├── rds.tf                      # RDS PostgreSQL 16 + random password + Secrets Manager
 │   ├── elasticache.tf              # ElastiCache Redis 7
 │   ├── ebs-csi.tf                  # EBS CSI driver + gp3 StorageClass (default)
+│   ├── alb-controller.tf           # ALB controller IAM + IRSA
+│   ├── helm-alb.tf                 # ALB controller Helm release
 │   ├── helm-monitoring.tf          # Prometheus + Grafana + random password + Secrets Manager
 │   ├── helm-eso.tf                 # External Secrets Operator
 │   ├── helm-kyverno.tf             # Kyverno admission controller
 │   ├── helm-strimzi.tf             # Strimzi Kafka operator
 │   ├── helm-loki.tf                # Loki log aggregation
 │   ├── helm-tempo.tf               # Tempo distributed tracing
-│   ├── helm-alb.tf                 # AWS Load Balancer Controller
 │   ├── helm-external-dns.tf        # ExternalDNS + Route 53 integration
+│   ├── external-dns-iam.tf         # ExternalDNS IAM role
 │   ├── irsa-nimbus.tf              # IRSA role for ESO (scoped to nimbus-cluster/*)
 │   ├── ecr.tf                      # 5 ECR repositories (nimbus/*)
 │   ├── namespaces.tf               # Kubernetes namespaces (nimbus, monitoring, kafka, argocd)
-│   ├── outputs.tf                  # Cluster endpoint, RDS/Grafana secret ARNs, ECR URLs
 │   └── nimbus.tfvars               # Cluster config (committed via .gitignore exception)
 │
 ├── Jenkins-Server-TF/              # Jenkins EC2 – IaC
 │   ├── main.tf                     # EC2, IAM role, inline policies, SG
+│   ├── variables.tf                # Instance type, key name, volume size
+│   ├── outputs.tf                  # Public IP, SSH command
+│   ├── backend.tf                  # Remote state – S3 + DynamoDB
 │   ├── tools-install.sh            # Jenkins, Docker, Terraform, kubectl, Trivy, SonarQube
 │   └── jcasc/
 │       ├── jenkins.yaml            # JCasC – credentials, SonarQube, 6 pipeline jobs
-│       └── setup-jcasc.sh          # One-command secret injection + SSH configuration
+│       ├── setup-jcasc.sh          # One-command secret injection + SSH configuration
+│       └── plugins.txt             # Jenkins plugin list
 │
 ├── Jenkins-Pipeline-Code/
 │   ├── Jenkinsfile-Infrastructure  # 9-stage pipeline: full EKS platform deployment
 │   └── Jenkinsfile-Nimbus          # 9-stage DevSecOps: SonarQube → Trivy → ECR → ArgoCD
 │
 ├── helm/nimbus-service/            # Shared Helm chart – all 5 services
+│   ├── Chart.yaml
 │   ├── templates/                  # Deployment, Service, HPA templates
 │   ├── values.yaml                 # Base defaults
 │   └── values-{auth,catalog,cart,order,notification}.yaml
 │
 ├── Kubernetes-Manifests-file/
 │   ├── Kafka/kafka-cluster.yaml    # Strimzi KafkaCluster CR (KRaft, 3 brokers, gp3)
-│   ├── Nimbus-Frontend/            # nginx Deployment + ConfigMap + ALB Ingress
+│   ├── Nimbus-Frontend/            # nginx Deployment + ALB Ingress
+│   ├── Namespace/nimbus-namespace.yaml
 │   ├── Security/                   # ExternalSecret, SecretStore, NetworkPolicies, Kyverno policies
 │   ├── Monitoring/                 # ServiceMonitor CRs, PrometheusRule alerts
-│   └── grafana-ingress.yaml        # ALB Ingress for Grafana + Prometheus (shared group)
+│   ├── grafana-ingress.yaml        # ALB Ingress for Grafana + Prometheus (shared group)
+│   └── monitoring-alerts.yaml      # PrometheusRule – nimbus namespace alerts
 │
 ├── argocd/
 │   ├── app-of-apps.yaml            # Root ArgoCD app – auto-discovers argocd/apps/
@@ -284,6 +305,8 @@ nimbus-retail-platform/
 │   ├── RUNBOOK.md                  # Day-2 operations – rollback, scale, rotate, investigate
 │   └── ADRs/                       # 5 Architecture Decision Records
 │
+├── assets/                         # Architecture diagram + live platform screenshots
+├── .github/workflows/ci.yml        # GitHub Actions – YAML validation + Terraform validate
 ├── bootstrap.sh                    # Creates S3, DynamoDB, key pair – idempotent
 ├── destroy.sh                      # 11-phase ordered teardown, zero orphaned resources
 └── README.md
