@@ -31,46 +31,7 @@ The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Gr
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Internet                                                                │
-│     │                                                                    │
-│     ▼                                                                    │
-│  Route 53 (platinum-consults.com)  ←── ExternalDNS (auto-managed DNS)   │
-│     │                                                                    │
-│     ▼                                                                    │
-│  AWS ALB (internet-facing)  ←── AWS Load Balancer Controller             │
-│     │                                                                    │
-│     ├── /auth/*  ──────► auth-service        (Node.js / Express) :3001  │
-│     ├── /products* ────► catalog-service     (Python / FastAPI)  :3002  │
-│     ├── /cart/*  ──────► cart-service        (Node.js / Express) :3003  │
-│     ├── /orders* ──────► order-service       (Node.js / Express) :3004  │
-│     └── /        ──────► frontend            (nginx static)      :80    │
-│                                                                          │
-│  ┌─────── nimbus namespace ──────────────────────────────────────────┐  │
-│  │                                                                    │  │
-│  │  auth  ─── Kafka (users.registered) ──► notification-service     │  │
-│  │  order ─── Kafka (orders.created)   ──►  (Node.js consumer)      │  │
-│  │                                                                    │  │
-│  │  All services  ──► RDS PostgreSQL 16  (private subnets, SSL)     │  │
-│  │  cart/catalog  ──► ElastiCache Redis  (private subnets)          │  │
-│  │  auth/order    ──► Strimzi Kafka      (KRaft, 3 brokers, gp3)    │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│  ┌─────── platform layer ────────────────────────────────────────────┐  │
-│  │  ArgoCD      GitOps – App-of-Apps, watches GitHub/main            │  │
-│  │  ESO         Syncs AWS Secrets Manager → K8s Secrets (IRSA)       │  │
-│  │  Kyverno     Admission control – enforce limits, block privileged  │  │
-│  │  Prometheus  Metrics scraping – all namespaces, ServiceMonitors    │  │
-│  │  Grafana     Dashboards at grafana.platinum-consults.com           │  │
-│  │  Loki        Log aggregation via Promtail DaemonSet                │  │
-│  │  Tempo       Distributed tracing (OTLP-ready)                     │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│  Jenkins EC2 ──► Terraform ──► EKS + RDS + Redis + Kafka + ECR          │
-│  Jenkins EC2 ──► ArgoCD   ──► App-of-Apps ──► all services deployed     │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+![NimbusRetail AWS Architecture](assets/nimbus-architecture.png)
 
 ---
 

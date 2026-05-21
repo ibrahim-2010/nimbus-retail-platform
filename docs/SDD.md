@@ -60,76 +60,7 @@ order-service → orders.created    → notification-service
 
 ### 3.1 Architecture Diagram
 
-```mermaid
-flowchart TB
-    subgraph Internet
-        User([User / Browser])
-        GH([GitHub\nApp + Platform Repos])
-    end
-
-    subgraph AWS["AWS us-east-1 (Account 022374769206)"]
-        R53[Route 53\nplatinum-consults.com]
-        ECR[ECR\nnimbus/* repos]
-        SM[Secrets Manager\nnimbus-cluster/*]
-
-        subgraph VPC["VPC 10.0.0.0/16"]
-            subgraph PublicSubnets["Public Subnets (us-east-1a/b)"]
-                ALB[Application\nLoad Balancer]
-                NAT[NAT Gateway]
-                JenkinsEC2[Jenkins EC2\nm7i-flex.large]
-            end
-
-            subgraph PrivateSubnets["Private Subnets (us-east-1a/b)"]
-                subgraph EKS["EKS Cluster – nimbus-cluster (k8s 1.31)"]
-                    subgraph NimbusNS["namespace: nimbus"]
-                        Auth[auth-service]
-                        Catalog[catalog-service]
-                        Cart[cart-service]
-                        Order[order-service]
-                        Notify[notification-service]
-                        ESO[External Secrets\nOperator]
-                    end
-                    subgraph KafkaNS["namespace: kafka"]
-                        Kafka[Strimzi Kafka\n3 brokers KRaft]
-                    end
-                    subgraph MonitoringNS["namespace: monitoring"]
-                        Prom[Prometheus]
-                        Grafana[Grafana]
-                        Loki[Loki + Promtail]
-                        Tempo[Tempo]
-                    end
-                    subgraph KyvernoNS["namespace: kyverno"]
-                        Kyverno[Kyverno]
-                    end
-                    subgraph ArgoCDNS["namespace: argocd"]
-                        ArgoCD[ArgoCD]
-                    end
-                end
-                RDS[(RDS PostgreSQL 16\ndb.t3.micro)]
-                Redis[(ElastiCache Redis 7\ncache.t3.micro)]
-            end
-        end
-    end
-
-    User -->|HTTPS| R53
-    R53 -->|A record\nExternalDNS| ALB
-    ALB --> Auth & Catalog & Cart & Order
-    Order -->|HTTP| Cart
-    Auth & Order & Notify <-->|port 9092| Kafka
-    Auth & Cart & Order & Catalog -->|port 5432| RDS
-    Catalog & Cart -->|port 6379| Redis
-    ESO -->|IRSA| SM
-    SM -.->|synced secrets| Auth & Cart & Order & Catalog
-
-    JenkinsEC2 -->|docker push| ECR
-    JenkinsEC2 -->|git push image tag| GH
-    GH -->|watched by| ArgoCD
-    ArgoCD -->|Helm sync| NimbusNS & KafkaNS
-    ECR -->|imagePull| Auth & Catalog & Cart & Order & Notify
-
-    Prom -->|scrapes /metrics| Auth & Catalog & Cart & Order & Notify
-    Loki -->|ships logs| Auth & Catalog & Cart & Order & Notify
-```
+![NimbusRetail AWS Architecture](../assets/nimbus-architecture.png)
 
 ### 3.2 Infrastructure Summary
 
