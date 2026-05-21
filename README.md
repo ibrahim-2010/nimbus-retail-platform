@@ -82,7 +82,7 @@ This project was built to reflect production platform engineering practices – 
 - **Alerts**: 5 PrometheusRule alerts – PodDown, HighCPU, CrashLooping, HighErrorRate, KafkaConsumerLag
 
 ### Documentation Standards
-- **SDD** (System Design Document) with Mermaid architecture diagram
+- **SDD** (System Design Document) with full AWS architecture diagram
 - **5 Architecture Decision Records** – every major technology choice is justified with alternatives considered
 - **Operational Runbook** – 11 day-2 procedures (rollback, scale, rotate secrets, investigate lag)
 - **Issues Report** – 14 production issues documented with root cause, fix, and lesson learned
@@ -278,7 +278,7 @@ nimbus-retail-platform/
 │   └── apps/                       # 11 child app manifests
 │
 ├── docs/
-│   ├── SDD.md                      # System Design Document + Mermaid architecture diagram
+│   ├── SDD.md                      # System Design Document + AWS architecture diagram
 │   ├── DEPLOYMENT-GUIDE.md         # Full deployment walkthrough + secret management + rotation
 │   ├── ISSUES-REPORT.md            # 14 production issues – root cause + fix + lesson
 │   ├── RUNBOOK.md                  # Day-2 operations – rollback, scale, rotate, investigate
@@ -401,7 +401,7 @@ bash destroy.sh
 
 | Document | Content |
 |---|---|
-| [`docs/SDD.md`](docs/SDD.md) | System Design Document – full architecture with Mermaid diagram |
+| [`docs/SDD.md`](docs/SDD.md) | System Design Document – full AWS architecture diagram |
 | [`docs/DEPLOYMENT-GUIDE.md`](docs/DEPLOYMENT-GUIDE.md) | Step-by-step deployment, secret management strategy, credential rotation |
 | [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) | 14 production issues – root cause, fix, and lesson for each |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Day-2 operations – scaling, rollback, secret rotation, incident investigation |
