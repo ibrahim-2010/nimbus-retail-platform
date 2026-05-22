@@ -25,7 +25,7 @@ The project was built to reflect how a real platform engineering team operates: 
 
 The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Grafana, Loki, Tempo, Kyverno, ESO – deploys from a single Jenkins pipeline with zero manual Kubernetes or AWS steps after initial setup.
 
-> **14 real production issues** encountered and resolved across deployment cycles. Every root cause and fix is documented in [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) – not a tutorial, not a happy path.
+> **15 real production issues** encountered and resolved across deployment cycles. Every root cause and fix is documented in [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) – not a tutorial, not a happy path.
 
 ---
 
@@ -85,7 +85,7 @@ This project was built to reflect production platform engineering practices – 
 - **SDD** (System Design Document) with full AWS architecture diagram
 - **5 Architecture Decision Records** – every major technology choice is justified with alternatives considered
 - **Operational Runbook** – 11 day-2 procedures (rollback, scale, rotate secrets, investigate lag)
-- **Issues Report** – 14 production issues documented with root cause, fix, and lesson learned
+- **Issues Report** – 15 production issues documented with root cause, fix, and lesson learned
 - **Deployment Guide** – step-by-step with secret management strategy and credential rotation
 
 ---
@@ -306,7 +306,7 @@ nimbus-retail-platform/
 ├── docs/
 │   ├── SDD.md                      # System Design Document + AWS architecture diagram
 │   ├── DEPLOYMENT-GUIDE.md         # Full deployment walkthrough + secret management + rotation
-│   ├── ISSUES-REPORT.md            # 14 production issues – root cause + fix + lesson
+│   ├── ISSUES-REPORT.md            # 15 production issues – root cause + fix + lesson
 │   ├── RUNBOOK.md                  # Day-2 operations – rollback, scale, rotate, investigate
 │   └── ADRs/                       # 5 Architecture Decision Records
 │

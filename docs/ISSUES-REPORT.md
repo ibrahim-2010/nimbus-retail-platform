@@ -49,14 +49,25 @@ Terraform evaluates provider configuration before resources exist. `aws_eks_clus
 **Fix:**  
 Split Terraform apply into two stages in `Jenkinsfile-Infrastructure`:
 
-- **Stage 1:** Deploy only EKS cluster + node group via `-target`
+- **Stage 1:** Deploy NAT gateway + private routes + EKS cluster + node group via `-target`
 - **Stage 2:** Full apply once EKS endpoint is resolvable
 
 ```groovy
-sh 'terraform apply -target=aws_eks_cluster.main -target=aws_eks_node_group.main -auto-approve'
+sh '''
+    terraform apply \
+      -target=aws_nat_gateway.main \
+      -target=aws_route_table.private \
+      -target=aws_route_table_association.private \
+      -target=aws_eks_cluster.main \
+      -target=aws_eks_node_group.main \
+      -var-file="nimbus.tfvars" \
+      -auto-approve
+'''
 // then
-sh 'terraform apply -auto-approve'
+sh 'terraform apply -var-file="nimbus.tfvars" -auto-approve'
 ```
+
+> Note: NAT gateway and private route tables were added to Stage 1 targets after Issue 15 — nodes need outbound internet access to bootstrap. See Issue 15.
 
 **Files Changed:** `Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure`
 

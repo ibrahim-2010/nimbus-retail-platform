@@ -217,43 +217,29 @@ kubectl port-forward svc/monitoring-kube-prometheus-prometheus -n monitoring 909
 ## 9. Deploy the Stack from Scratch
 
 ```bash
-# 1. Bootstrap S3 + DynamoDB (if first time)
+# 1. Bootstrap S3 + DynamoDB + key pair (if first time)
 cd nimbus-retail-platform
 bash bootstrap.sh
 
-# 2. Jenkins server
+# 2. Restrict SSH to your IP before applying Jenkins Terraform
+curl ifconfig.me   # note your IP
+# Create Jenkins-Server-TF/terraform.tfvars:
+# ssh_allowed_cidr = "YOUR_IP/32"
+
 cd Jenkins-Server-TF
 terraform init && terraform apply
 # Wait ~5 minutes, then SSH in and run:
 sudo bash /opt/setup-jcasc.sh
 
-# 3. EKS + all infrastructure
-cd ../EKS-Terraform
-terraform init && terraform apply -var-file="nimbus.tfvars"
+# 3–8. All remaining steps run via the nimbus-infrastructure Jenkins pipeline:
+#   → Jenkins UI → nimbus-infrastructure → Build Now
+#   Pipeline stages: Terraform Init → Terraform Apply EKS Cluster →
+#   Terraform Apply Full Stack → Configure kubectl → Populate Secrets Manager →
+#   Install ArgoCD → Deploy App-of-Apps → Initialize Database
 
-# 4. Configure kubectl
-aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
-cp ~/.kube/config /var/lib/jenkins/.kube/config
-chown -R jenkins:jenkins /var/lib/jenkins/.kube
-
-# 5. Populate Secrets Manager
-aws secretsmanager create-secret \
-  --name nimbus-cluster/nimbus-secrets \
-  --secret-string '{"JWT_SECRET":"...","DATABASE_URL":"...","REDIS_URL":"..."}'
-aws secretsmanager create-secret \
-  --name nimbus-cluster/nimbus-catalog-secrets \
-  --secret-string '{"DATABASE_URL":"postgresql://...","REDIS_URL":"..."}'
-
-# 6. Install ArgoCD
-kubectl apply -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml \
-  --server-side --force-conflicts
-
-# 7. Deploy app-of-apps (connects ArgoCD to the platform repo)
-kubectl apply -f argocd/app-of-apps.yaml
-
-# 8. Trigger first Jenkins builds for all 5 services
-# → In Jenkins UI, run each nimbus-*-service job once to push initial images to ECR
+# 9. Trigger first Jenkins builds for all 5 services (can run in parallel)
+#   → Jenkins UI: run each nimbus-*-service job once to push initial images to ECR
+#   → ArgoCD picks up the tag changes and deploys all 5 services
 ```
 
 ---
@@ -265,12 +251,20 @@ cd nimbus-retail-platform
 bash destroy.sh
 ```
 
-The script runs in 10 phases. Full teardown takes ~15 minutes. The S3 bucket and
+The script runs in 11 phases. Full teardown takes ~15 minutes. The S3 bucket and
 DynamoDB table are preserved intentionally – delete them manually only if done
 with the project:
 
 ```bash
-aws s3 rb s3://ibrahim-cloud-native-tf-state --force
+# S3 bucket has versioning enabled — must delete all versions before deleting bucket
+aws s3api delete-objects --bucket ibrahim-cloud-native-tf-state \
+  --delete "$(aws s3api list-object-versions --bucket ibrahim-cloud-native-tf-state \
+    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)"
+aws s3api delete-objects --bucket ibrahim-cloud-native-tf-state \
+  --delete "$(aws s3api list-object-versions --bucket ibrahim-cloud-native-tf-state \
+    --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json)"
+aws s3api delete-bucket --bucket ibrahim-cloud-native-tf-state --region us-east-1
+
 aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-east-1
 ```
 
