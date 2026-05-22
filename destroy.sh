@@ -517,6 +517,29 @@ for CLUSTER in $(aws eks list-clusters --region "$REGION" \
   aws eks wait cluster-deleted --name "$CLUSTER" --region "$REGION" 2>/dev/null || true
 done
 
+# EKS IAM roles — orphaned if Terraform state is lost or destroy fails midway
+echo "  Cleaning up EKS IAM roles..."
+for ROLE in \
+  nimbus-cluster-cluster-role \
+  nimbus-cluster-node-role \
+  nimbus-cluster-alb-controller-role \
+  nimbus-cluster-ebs-csi-driver-role \
+  nimbus-cluster-external-dns-role \
+  nimbus-cluster-eso-role; do
+  if aws iam get-role --role-name "$ROLE" 2>/dev/null | grep -q "RoleName"; then
+    for ARN in $(aws iam list-attached-role-policies --role-name "$ROLE" \
+        --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null); do
+      aws iam detach-role-policy --role-name "$ROLE" --policy-arn "$ARN" 2>/dev/null || true
+    done
+    for PNAME in $(aws iam list-role-policies --role-name "$ROLE" \
+        --query "PolicyNames[]" --output text 2>/dev/null); do
+      aws iam delete-role-policy --role-name "$ROLE" --policy-name "$PNAME" 2>/dev/null || true
+    done
+    aws iam delete-role --role-name "$ROLE" 2>/dev/null || true
+    echo "    Deleted IAM role: $ROLE"
+  fi
+done
+
 # RDS instances
 for DB in $(aws rds describe-db-instances --region "$REGION" \
     --query "DBInstances[].DBInstanceIdentifier" --output text 2>/dev/null); do

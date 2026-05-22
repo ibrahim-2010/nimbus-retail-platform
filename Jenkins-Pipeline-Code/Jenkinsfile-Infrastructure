@@ -45,16 +45,20 @@ pipeline {
             }
         }
 
-        // ── Stage 1: EKS cluster + node group only ───────────────────────────
+        // ── Stage 1: NAT gateway + private routes + EKS cluster + node group ──
+        // NAT gateway and private route tables must exist before the node group
+        // so nodes in private subnets can reach AWS APIs during bootstrap.
         // Kubernetes/Helm provider uses aws_eks_cluster.main.endpoint which is
-        // empty until the cluster exists. Targeting the cluster first ensures
-        // the endpoint is resolvable before any kubernetes_* or helm_release
-        // resources run in Stage 2.
+        // empty until the cluster exists — Stage 2 runs the full apply once the
+        // endpoint is resolvable.
         stage('Terraform Apply — EKS Cluster') {
             steps {
                 dir('EKS-Terraform') {
                     sh '''
                         terraform apply \
+                          -target=aws_nat_gateway.main \
+                          -target=aws_route_table.private \
+                          -target=aws_route_table_association.private \
                           -target=aws_eks_cluster.main \
                           -target=aws_eks_node_group.main \
                           -var-file="nimbus.tfvars" \

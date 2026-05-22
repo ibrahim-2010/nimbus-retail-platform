@@ -356,6 +356,42 @@ resources:
 
 ---
 
+## Issue 15 — EKS Nodes Failed to Join Cluster (NodeCreationFailure)
+
+**Symptom:**  
+Terraform Apply — EKS Cluster stage failed after ~44 minutes with:
+
+```
+Error: waiting for EKS Node Group (nimbus-cluster:worker-nodes) create:
+unexpected state 'CREATE_FAILED', wanted target 'ACTIVE'.
+last error: NodeCreationFailure: Instances failed to join the kubernetes cluster
+```
+
+Node console output showed `nodeadm` retrying `EC2/DescribeInstances` indefinitely — never completing bootstrap.
+
+**Root Cause:**  
+Stage 1 of the two-stage Terraform apply only targeted `aws_eks_cluster.main` and `aws_eks_node_group.main`. The NAT gateway and private subnet route tables were not yet created at that point. Nodes launched into private subnets with no outbound route — they could not reach AWS APIs to complete bootstrap.
+
+**Fix:**  
+Added the NAT gateway and private route table resources to the Stage 1 `-target` list so they exist before the node group is created:
+
+```groovy
+sh '''
+    terraform apply \
+      -target=aws_nat_gateway.main \
+      -target=aws_route_table.private \
+      -target=aws_route_table_association.private \
+      -target=aws_eks_cluster.main \
+      -target=aws_eks_node_group.main \
+      -var-file="nimbus.tfvars" \
+      -auto-approve
+'''
+```
+
+**Files Changed:** `Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure`
+
+---
+
 ## Summary Table
 
 | # | Issue | Root Cause | Fix |
@@ -374,3 +410,4 @@ resources:
 | 12 | ALB 503 on API calls | Wrong health check path (/) | Changed to /healthz + nginx config |
 | 13 | Database schemas missing | init-db.sql only runs in docker-compose | One-time Kubernetes Job against RDS |
 | 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |
+| 15 | NodeCreationFailure — nodes can't join cluster | NAT gateway + private routes not created before node group | Added NAT gateway + route table targets to Stage 1 Terraform apply |
