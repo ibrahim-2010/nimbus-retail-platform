@@ -223,11 +223,11 @@ Every major technology choice is documented with the alternative considered and 
 | 8 | ALB 503 on all API calls | Health check path `/` not exposed by microservices | Changed to `/healthz` + nginx config update | ALB marks targets unhealthy if the health check path returns non-200 |
 | 9 | Database schemas missing on RDS | `init-db.sql` only runs via Docker's `initdb` mechanism | psql Kubernetes Job in Jenkins pipeline | EKS has no equivalent to docker-compose `initdb` – must be explicit |
 | 10 | Kyverno fails with 6 webhook errors | ALB controller not ready when Kyverno installed its Services | `depends_on = [helm_release.alb_controller]` | Admission webhooks fire immediately – dependent controllers must be ready first |
-| 11 | ExternalSecret `v1beta1` error | Wrong API version in manifest | Changed to `v1` | ESO v1 dropped `v1beta1` — always check CRD API versions after upgrades |
-| 12 | Only 2 of 6 Jenkins jobs created | `tools-install.sh` had stale inline JCasC out of sync with `jcasc/jenkins.yaml` | Removed inline JCasC; `tools-install.sh` now `wget`s `jcasc/jenkins.yaml` at boot | Two sources of truth will always drift — one file, one source |
+| 11 | ExternalSecret `v1beta1` error | Wrong API version in manifest | Changed to `v1` | ESO v1 dropped `v1beta1` – always check CRD API versions after upgrades |
+| 12 | Only 2 of 6 Jenkins jobs created | `tools-install.sh` had stale inline JCasC out of sync with `jcasc/jenkins.yaml` | Removed inline JCasC; `tools-install.sh` now `wget`s `jcasc/jenkins.yaml` at boot | Two sources of truth will always drift – one file, one source |
 | 13 | Orphan IAM roles block fresh deployment | Previous `terraform destroy` left EKS IAM roles behind | Added role cleanup loop to `destroy.sh` phase 9b fallback | Terraform state loss = orphan resources; destroy scripts must not rely on state alone |
-| 14 | Kyverno blocked db-init Job | Job container had no resource limits — violated `require-resource-limits` policy | Added `requests` and `limits` to Job container spec | Enforce policies apply to ALL workloads including one-off Jobs |
-| 15 | EKS nodes fail to join cluster (NodeCreationFailure) | NAT gateway not created before node group — nodes in private subnets had no outbound route | Added `aws_nat_gateway.main`, `aws_route_table.private`, `aws_route_table_association.private` to Stage 1 `-target` list | Nodes bootstrap by calling AWS APIs — private subnets need NAT before nodes launch |
+| 14 | Kyverno blocked db-init Job | Job container had no resource limits – violated `require-resource-limits` policy | Added `requests` and `limits` to Job container spec | Enforce policies apply to ALL workloads including one-off Jobs |
+| 15 | EKS nodes fail to join cluster (NodeCreationFailure) | NAT gateway not created before node group – nodes in private subnets had no outbound route | Added `aws_nat_gateway.main`, `aws_route_table.private`, `aws_route_table_association.private` to Stage 1 `-target` list | Nodes bootstrap by calling AWS APIs – private subnets need NAT before nodes launch |
 
 ---
 

@@ -12,7 +12,7 @@
 After running `setup-jcasc.sh`, Jenkins showed only 2 jobs (`nimbus-auth-service`, `nimbus-infrastructure`) instead of the expected 6 (5 service pipelines + infrastructure).
 
 **Root Cause:**  
-`tools-install.sh` embedded a full JCasC config inline as a heredoc and wrote it to `/var/lib/jenkins/casc_configs/jenkins.yaml` at EC2 provisioning time. This inline copy only defined 2 jobs and was never kept in sync with `jcasc/jenkins.yaml` — the authoritative file in the repo that had all 6 jobs. Any time `jcasc/jenkins.yaml` was updated, `tools-install.sh` had to be manually updated too, and it wasn't.
+`tools-install.sh` embedded a full JCasC config inline as a heredoc and wrote it to `/var/lib/jenkins/casc_configs/jenkins.yaml` at EC2 provisioning time. This inline copy only defined 2 jobs and was never kept in sync with `jcasc/jenkins.yaml` – the authoritative file in the repo that had all 6 jobs. Any time `jcasc/jenkins.yaml` was updated, `tools-install.sh` had to be manually updated too, and it wasn't.
 
 **Temporary Fix (applied to running server):**  
 SCP'd the correct `jcasc/jenkins.yaml` to the server and restarted Jenkins:
@@ -356,10 +356,10 @@ resources:
 
 ---
 
-## Issue 15 — EKS Nodes Failed to Join Cluster (NodeCreationFailure)
+## Issue 15 – EKS Nodes Failed to Join Cluster (NodeCreationFailure)
 
 **Symptom:**  
-Terraform Apply — EKS Cluster stage failed after ~44 minutes with:
+Terraform Apply – EKS Cluster stage failed after ~44 minutes with:
 
 ```
 Error: waiting for EKS Node Group (nimbus-cluster:worker-nodes) create:
@@ -367,10 +367,10 @@ unexpected state 'CREATE_FAILED', wanted target 'ACTIVE'.
 last error: NodeCreationFailure: Instances failed to join the kubernetes cluster
 ```
 
-Node console output showed `nodeadm` retrying `EC2/DescribeInstances` indefinitely — never completing bootstrap.
+Node console output showed `nodeadm` retrying `EC2/DescribeInstances` indefinitely – never completing bootstrap.
 
 **Root Cause:**  
-Stage 1 of the two-stage Terraform apply only targeted `aws_eks_cluster.main` and `aws_eks_node_group.main`. The NAT gateway and private subnet route tables were not yet created at that point. Nodes launched into private subnets with no outbound route — they could not reach AWS APIs to complete bootstrap.
+Stage 1 of the two-stage Terraform apply only targeted `aws_eks_cluster.main` and `aws_eks_node_group.main`. The NAT gateway and private subnet route tables were not yet created at that point. Nodes launched into private subnets with no outbound route – they could not reach AWS APIs to complete bootstrap.
 
 **Fix:**  
 Added the NAT gateway and private route table resources to the Stage 1 `-target` list so they exist before the node group is created:
@@ -410,4 +410,4 @@ sh '''
 | 12 | ALB 503 on API calls | Wrong health check path (/) | Changed to /healthz + nginx config |
 | 13 | Database schemas missing | init-db.sql only runs in docker-compose | One-time Kubernetes Job against RDS |
 | 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |
-| 15 | NodeCreationFailure — nodes can't join cluster | NAT gateway + private routes not created before node group | Added NAT gateway + route table targets to Stage 1 Terraform apply |
+| 15 | NodeCreationFailure – nodes can't join cluster | NAT gateway + private routes not created before node group | Added NAT gateway + route table targets to Stage 1 Terraform apply |
