@@ -6,24 +6,35 @@
 
 ---
 
-## Issue 1 – Only 2 Jenkins Jobs Instead of 8
+## Issue 1 – Only 2 Jenkins Jobs Instead of 6
 
 **Symptom:**  
-After running `setup-jcasc.sh`, Jenkins showed only 2 jobs (`three-tier-backend`, `three-tier-frontend`) instead of the expected 8.
+After running `setup-jcasc.sh`, Jenkins showed only 2 jobs (`nimbus-auth-service`, `nimbus-infrastructure`) instead of the expected 6 (5 service pipelines + infrastructure).
 
 **Root Cause:**  
-`tools-install.sh` writes a minimal 2-job JCasC config during EC2 provisioning. `setup-jcasc.sh` never replaced it with the full 8-job config from the GitHub repo.
+`tools-install.sh` embedded a full JCasC config inline as a heredoc and wrote it to `/var/lib/jenkins/casc_configs/jenkins.yaml` at EC2 provisioning time. This inline copy only defined 2 jobs and was never kept in sync with `jcasc/jenkins.yaml` — the authoritative file in the repo that had all 6 jobs. Any time `jcasc/jenkins.yaml` was updated, `tools-install.sh` had to be manually updated too, and it wasn't.
 
-**Fix:**  
-Added a `wget` step inside `setup-jcasc.sh` to download the full `jenkins.yaml` from GitHub before restarting Jenkins:
+**Temporary Fix (applied to running server):**  
+SCP'd the correct `jcasc/jenkins.yaml` to the server and restarted Jenkins:
 
 ```bash
-sudo wget -q -O /var/lib/jenkins/casc_configs/jenkins.yaml \
-  "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/jenkins.yaml"
-sudo chown jenkins:jenkins /var/lib/jenkins/casc_configs/jenkins.yaml
+scp -i test.pem jcasc/jenkins.yaml ubuntu@<jenkins-ip>:/tmp/jenkins-fix.yaml
+ssh ubuntu@<jenkins-ip> "sudo cp /tmp/jenkins-fix.yaml /var/lib/jenkins/casc_configs/jenkins.yaml"
+sudo systemctl restart jenkins
 ```
 
-**Files Changed:** `Jenkins-Server-TF/jcasc/setup-jcasc.sh`
+**Permanent Fix:**  
+Removed the 99-line inline JCasC heredoc from `tools-install.sh` entirely. Replaced with a `wget` that downloads `jcasc/jenkins.yaml` from GitHub at EC2 boot time:
+
+```bash
+wget -q -O /tmp/jenkins-casc.yaml \
+  "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/jenkins.yaml" \
+  || { echo "ERROR: Could not download jenkins.yaml from GitHub"; exit 1; }
+```
+
+`jcasc/jenkins.yaml` is now the single source of truth. Future job changes only require editing that one file.
+
+**Files Changed:** `Jenkins-Server-TF/tools-install.sh`
 
 ---
 
@@ -349,7 +360,7 @@ resources:
 
 | # | Issue | Root Cause | Fix |
 |---|-------|-----------|-----|
-| 1 | Only 2 Jenkins jobs | tools-install.sh overwrote JCasC | wget full jenkins.yaml in setup-jcasc.sh |
+| 1 | Only 2 of 6 Jenkins jobs | tools-install.sh had stale inline JCasC (2 jobs) | Removed inline JCasC from tools-install.sh; wget jcasc/jenkins.yaml at boot |
 | 2 | Kubernetes provider → localhost | EKS endpoint empty at plan time | Two-stage Terraform apply |
 | 3 | RDS/ElastiCache AccessDenied | Missing IAM permissions, policy limit hit | Inline IAM policy |
 | 4 | Wrong cluster name | nimbus.tfvars gitignored | Added !nimbus.tfvars to .gitignore |
