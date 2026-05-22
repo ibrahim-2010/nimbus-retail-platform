@@ -35,8 +35,7 @@ and HPA settings without duplicating template code.
 ArgoCD supports this pattern natively – each child app references the same `path`
 with a different `helm.valueFiles` entry.
 
-Option C (Kustomize) was rejected because the team is more familiar with Helm and
-the project already uses Helm for all operator deployments (Strimzi, Kyverno, ESO, etc.).
+**Option C (Kustomize)** is a legitimate alternative used in many production platforms, particularly where teams want to avoid Helm's templating complexity. Kustomize's patch-based model is conceptually simpler and avoids Helm's release state management. It was rejected here because the project already uses Helm for all operator deployments (Strimzi, Kyverno, ESO, monitoring) and mixing two packaging systems would add cognitive overhead without a clear benefit at this scale. If the team were starting from scratch with a preference for fewer abstractions, Kustomize would be a reasonable choice.
 
 ## Consequences
 

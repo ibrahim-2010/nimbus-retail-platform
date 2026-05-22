@@ -35,8 +35,9 @@ read and write Kyverno policies without learning a new language.
 fixed profiles (Privileged, Baseline, Restricted). They cannot enforce custom rules
 such as "require resource limits" or "disallow `:latest` tag."
 
-Both OPA and Kyverno are CNCF-graduated, so maturity is not a differentiator.
-Kyverno's simpler authoring model is the deciding factor for this project.
+**The honest case for OPA/Gatekeeper:** Rego is more expressive than Kyverno's YAML DSL for complex policies – cross-resource validation, external data lookups, and multi-step logic are significantly easier in Rego. Gatekeeper also has a larger production footprint at enterprise scale. The trade-off is real: a team that invests in learning Rego gets a more powerful policy engine. For this project, the policies required (resource limits, privileged containers, image tags, labels) are simple enough that Kyverno's YAML DSL handles them without limitation. If the project needed complex multi-resource policies, OPA would be the better choice.
+
+Both OPA and Kyverno are CNCF-graduated, so maturity is not a differentiator. Kyverno's simpler authoring model is the deciding factor for this project's policy requirements.
 
 ## Consequences
 
