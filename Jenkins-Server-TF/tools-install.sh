@@ -168,105 +168,10 @@ sudo mkdir -p /var/lib/jenkins/casc_configs
 
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "localhost")
 
-cat > /tmp/jenkins-casc.yaml << 'CASC_EOF'
-jenkins:
-  systemMessage: "Nimbus Retail Platform — Configured via JCasC"
-  numExecutors: 2
-  securityRealm:
-    local:
-      allowsSignup: false
-      users:
-        - id: "admin"
-          password: "${JENKINS_ADMIN_PASSWORD:-admin123}"
-  authorizationStrategy:
-    loggedInUsersCanDoAnything:
-      allowAnonymousRead: false
-
-unclassified:
-  location:
-    url: "JENKINS_URL_PLACEHOLDER"
-
-credentials:
-  system:
-    domainCredentials:
-      - credentials:
-          - usernamePassword:
-              scope: GLOBAL
-              id: "github-creds"
-              description: "GitHub credentials for SCM checkout"
-              username: "${GITHUB_USERNAME}"
-              password: "${GITHUB_PAT}"
-          - string:
-              scope: GLOBAL
-              id: "github-token"
-              description: "GitHub PAT for pipeline git push"
-              secret: "${GITHUB_PAT}"
-          - string:
-              scope: GLOBAL
-              id: "ACCOUNT_ID"
-              description: "AWS Account ID"
-              secret: "${AWS_ACCOUNT_ID}"
-          - string:
-              scope: GLOBAL
-              id: "ECR_REPO1"
-              description: "Frontend ECR repository name"
-              secret: "frontend"
-          - string:
-              scope: GLOBAL
-              id: "ECR_REPO2"
-              description: "Backend ECR repository name"
-              secret: "backend"
-          - string:
-              scope: GLOBAL
-              id: "sonar"
-              description: "SonarQube authentication token"
-              secret: "${SONARQUBE_TOKEN}"
-
-jobs:
-  - script: >
-      pipelineJob('nimbus-infrastructure') {
-        description('Deploy EKS cluster + RDS + Redis + Kafka + ESO + Kyverno + observability + ArgoCD')
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('https://github.com/ibrahim-2010/nimbus-retail-platform.git')
-                  credentials('github-creds')
-                }
-                branches('*/main')
-              }
-            }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure')
-          }
-        }
-      }
-  - script: >
-      pipelineJob('nimbus-auth-service') {
-        description('auth-service — SonarQube + Trivy + ECR + Helm values update')
-        parameters {
-          choiceParam('SERVICE_NAME',
-            ['auth-service', 'catalog-service', 'cart-service', 'order-service', 'notification-service'],
-            'NimbusRetail service to build and deploy')
-        }
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('https://github.com/ibrahim-2010/nimbus-retail-platform.git')
-                  credentials('github-creds')
-                }
-                branches('*/main')
-              }
-            }
-            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Nimbus')
-          }
-        }
-      }
-CASC_EOF
-
-sed -i "s|JENKINS_URL_PLACEHOLDER|http://${PUBLIC_IP}:8080/|" /tmp/jenkins-casc.yaml
+echo "===> Downloading jenkins.yaml from GitHub (single source of truth)"
+wget -q -O /tmp/jenkins-casc.yaml \
+  "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/jenkins.yaml" \
+  || { echo "ERROR: Could not download jenkins.yaml from GitHub"; exit 1; }
 sudo cp /tmp/jenkins-casc.yaml /var/lib/jenkins/casc_configs/jenkins.yaml
 sudo chown -R jenkins:jenkins /var/lib/jenkins/casc_configs
 
