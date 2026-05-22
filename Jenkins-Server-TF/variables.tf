@@ -21,3 +21,9 @@ variable "volume_size" {
   type        = number
   default     = 30
 }
+
+variable "ssh_allowed_cidr" {
+  description = "CIDR block allowed to SSH into Jenkins (restrict to your IP: curl ifconfig.me)"
+  type        = string
+  default     = "0.0.0.0/0"
+}

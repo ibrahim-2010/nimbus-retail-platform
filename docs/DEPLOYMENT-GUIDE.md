@@ -68,6 +68,21 @@ Safe to skip if these already exist – the script checks before creating.
 
 ## Step 2 – Deploy the Jenkins Server (5 min)
 
+**Before applying — restrict SSH to your IP** (prevents abuse reports from open port 22):
+
+```bash
+# Get your current public IP
+curl ifconfig.me
+```
+
+Create `Jenkins-Server-TF/terraform.tfvars` with your IP:
+
+```hcl
+ssh_allowed_cidr = "YOUR_IP/32"
+```
+
+Then deploy:
+
 ```bash
 cd /c/Users/19122/nimbus-retail-platform/Jenkins-Server-TF
 terraform init
