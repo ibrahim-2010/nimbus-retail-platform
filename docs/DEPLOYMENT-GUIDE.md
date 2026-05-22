@@ -71,14 +71,16 @@ Safe to skip if these already exist – the script checks before creating.
 **Before applying — restrict SSH to your IP** (prevents abuse reports from open port 22):
 
 ```bash
-# Get your current public IP
+# Step 1: Get your current public IP (run this every time — home IPs can change)
 curl ifconfig.me
-```
 
-Create `Jenkins-Server-TF/terraform.tfvars` with your IP:
+# Step 2: Create terraform.tfvars with your IP (replace with actual output from above)
+cd /c/Users/19122/nimbus-retail-platform/Jenkins-Server-TF
+echo 'ssh_allowed_cidr = "YOUR_IP/32"' > terraform.tfvars
 
-```hcl
-ssh_allowed_cidr = "YOUR_IP/32"
+# Step 3: Verify it looks right
+cat terraform.tfvars
+# Expected output: ssh_allowed_cidr = "x.x.x.x/32"
 ```
 
 Then deploy:
