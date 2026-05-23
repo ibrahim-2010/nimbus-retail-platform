@@ -320,7 +320,8 @@ kubectl get pods -n kafka
 
 ```bash
 kubectl get pods -n monitoring
-# Expected: prometheus, grafana, loki, tempo pods, Running
+# Expected: prometheus, grafana, loki-0, tempo, promtail-* pods, Running
+# promtail runs as a DaemonSet – one pod per worker node (2 pods on a 2-node cluster)
 ```
 
 ```bash
@@ -456,6 +457,8 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 | `platinum-consults.com` returns NXDOMAIN | DNS not propagated yet | Wait 5–30 min after updating registrar nameservers; verify with `nslookup -type=NS platinum-consults.com 8.8.8.8` |
 | Site resolves but shows 503 on API calls | ALB health check wrong | Should be auto-fixed – check `alb.ingress.kubernetes.io/healthcheck-path: /healthz` in ingress |
 | ExternalDNS AccessDenied on Route 53 | Two hosted zones exist (orphan from old deployment) | `aws route53 list-hosted-zones` – identify and delete the orphan zone that doesn't match bootstrap's zone ID |
+| `prometheus.platinum-consults.com` unreachable after redeploy | Stale Route 53 alias pointing to old ALB; ExternalDNS won't update records it doesn't own | Check TXT ownership records exist in Route 53 for `prometheus.platinum-consults.com` – they are preserved in the hosted zone across deployments. If missing, ExternalDNS will create them on the first successful ingress sync |
+| Grafana shows Loki or Tempo datasource error | Wrong port or outdated Loki version | Tempo must use port 3200 (not 3100). Loki requires the `loki` chart (3.x) not the deprecated `loki-stack` – both are set correctly in Terraform |
 
 ---
 

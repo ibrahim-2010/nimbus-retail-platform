@@ -88,7 +88,7 @@ resource "helm_release" "monitoring" {
           {
             name      = "Tempo"
             type      = "tempo"
-            url       = "http://tempo:3100"
+            url       = "http://tempo:3200"
             access    = "proxy"
             isDefault = false
           }

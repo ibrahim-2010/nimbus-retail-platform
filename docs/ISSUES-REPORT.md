@@ -441,6 +441,93 @@ sh '''
 
 ---
 
+## Issue 17 – Prometheus DNS Not Resolving After Redeploy
+
+**Symptom:**  
+`http://prometheus.platinum-consults.com/` was unreachable after a destroy/redeploy cycle. `nslookup` returned the name but no IP – the DNS record existed but resolved to a dead ALB.
+
+**Root Cause:**  
+Route 53 had an alias record for `prometheus.platinum-consults.com` pointing to the old ALB hostname (`k8s-monitoring-2e5cdba1f8-1817786535`) from the previous deployment. After destroy, that ALB no longer existed (NXDOMAIN). ExternalDNS could not auto-correct it because the required TXT ownership record (`heritage=external-dns,...`) was missing – ExternalDNS only updates records it owns, and without the TXT record it treated the alias as externally managed and left it alone.
+
+**Temporary Fix (applied live):**  
+Updated the Route 53 alias to the current live ALB via AWS Console.
+
+**Permanent Fix:**  
+Added two TXT ownership records to Route 53 so ExternalDNS takes ownership and auto-updates on every future deployment:
+
+```
+prometheus.platinum-consults.com.       TXT  "heritage=external-dns,external-dns/owner=nimbus-cluster,external-dns/resource=ingress/monitoring/prometheus-ingress"
+cname-prometheus.platinum-consults.com. TXT  "heritage=external-dns,external-dns/owner=nimbus-cluster,external-dns/resource=ingress/monitoring/prometheus-ingress"
+```
+
+**Files Changed:** Route 53 (live -no Terraform file change required)
+
+---
+
+## Issue 18 – Tempo Datasource `i/o timeout` in Grafana
+
+**Symptom:**  
+Grafana showed Tempo datasource error:
+
+```
+Get "http://tempo:3100/api/echo": dial tcp 172.20.24.215:3100: i/o timeout
+```
+
+**Root Cause:**  
+`helm-monitoring.tf` configured the Tempo datasource URL as `http://tempo:3100`. Port 3100 is Loki's port. Tempo exposes its HTTP query API on port **3200**. Port 3100 on the Tempo pod does not exist, so all connection attempts timed out.
+
+**Fix:**  
+Corrected the Tempo datasource URL to `http://tempo:3200` in `helm-monitoring.tf`. Patched the live Grafana ConfigMap via `kubectl` and restarted the Grafana deployment to apply immediately without waiting for a full Terraform redeploy.
+
+```hcl
+{
+  name   = "Tempo"
+  type   = "tempo"
+  url    = "http://tempo:3200"   # was http://tempo:3100
+  access = "proxy"
+}
+```
+
+**Files Changed:** `EKS-Terraform/helm-monitoring.tf`
+
+---
+
+## Issue 19 – Loki "Unable to Connect" in Grafana (Grafana 13 + Loki 2.x Incompatibility)
+
+**Symptom:**  
+Grafana showed Loki datasource error: `Unable to connect with Loki. Please check the server logs for more details.`
+
+Loki itself was healthy – `wget loki:3100/ready` returned `ready`, and logs from all 6 namespaces (argocd, kafka, kube-system, kyverno, monitoring, nimbus) were actively being ingested.
+
+**Root Cause:**  
+Grafana 13.0.1 changed its Loki health check to use a newer LogQL meta-query syntax. `loki-stack` chart v2.10.3 ships Loki 2.9.3, which cannot parse the new query. Grafana logs confirmed:
+
+```
+logger=tsdb.loki endpoint=checkHealth msg="Loki health check failed"
+error="error from loki: parse error at line 1, col 1: syntax error: unexpected IDENTIFIER"
+```
+
+The `loki-stack` chart is deprecated and capped at Loki 2.9.x – it will never receive a fix for this.
+
+**Fix:**  
+Replaced the deprecated `loki-stack` chart with the new `loki` chart (Loki 3.6.7, singleBinary mode) plus a separate `promtail` chart. The entire `helm-loki.tf` was rewritten.
+
+Key config decisions for singleBinary mode:
+- `persistence.enabled = true` with `storageClass = "gp3"` -Loki 3.x requires a writable volume at `/var/loki`; first install attempt without persistence failed with `mkdir /var/loki: read-only file system`
+- `read/write/backend replicas = 0` -required to disable distributed mode and use singleBinary exclusively
+- `gateway.enabled = false` -not needed for single-node filesystem storage
+- `monitoring.selfMonitoring.enabled = false` -avoids circular dependency on itself during install
+
+Upgraded live on the cluster via Helm on Jenkins. Grafana health check now returns:
+
+```json
+{"message": "Data source successfully connected.", "status": "OK"}
+```
+
+**Files Changed:** `EKS-Terraform/helm-loki.tf`
+
+---
+
 ## Summary Table
 
 | # | Issue | Root Cause | Fix |
@@ -461,3 +548,6 @@ sh '''
 | 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |
 | 15 | NodeCreationFailure – nodes can't join cluster (first fix) | NAT gateway + private routes not created before node group | Added NAT gateway + private route table targets to Stage 1 |
 | 16 | NodeCreationFailure – nodes can't join cluster (second fix) | Public route table missing IGW route – NAT gateway had no path to internet | Added public route table + association targets to Stage 1 Terraform apply |
+| 17 | Prometheus DNS not resolving after redeploy | Stale Route 53 alias pointing to dead ALB; ExternalDNS couldn't update it (missing TXT ownership record) | Updated Route 53 alias + added TXT ownership records |
+| 18 | Tempo `i/o timeout` in Grafana | Datasource URL used port 3100 (Loki's port); Tempo HTTP API is on port 3200 | Corrected URL to http://tempo:3200 in helm-monitoring.tf |
+| 19 | Loki "Unable to connect" in Grafana | Grafana 13 health check uses newer LogQL syntax incompatible with Loki 2.9.3 (loki-stack chart, deprecated) | Replaced loki-stack with loki 3.x (singleBinary) + promtail chart |
