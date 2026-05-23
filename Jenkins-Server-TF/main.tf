@@ -29,7 +29,7 @@ resource "aws_security_group" "jenkins_sg" {
 
   # SSH
   ingress {
-    description = "SSH access — restrict to your IP: set ssh_allowed_cidr in terraform.tfvars"
+    description = "SSH access - restrict to your IP via ssh_allowed_cidr in terraform.tfvars"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
