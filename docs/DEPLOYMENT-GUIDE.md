@@ -16,7 +16,7 @@
 | 4 – Infrastructure pipeline | Jenkins UI | **Everything else** – EKS, RDS, Redis, ArgoCD |
 | 5 – Service builds | Jenkins UI | Build + push images, ArgoCD deploys pods |
 
-Steps 0–3 are one-time local setup. Steps 4–5 run entirely from the Jenkins server.
+Steps 0a–3 are one-time local setup. Steps 4–5 run entirely from the Jenkins server.
 
 ---
 
@@ -33,7 +33,49 @@ Steps 0–3 are one-time local setup. Steps 4–5 run entirely from the Jenkins 
 
 ---
 
-## Step 0 – Push Both Repos to GitHub
+## Step 0a – Point Your Domain to Route 53 (One-time, do this first)
+
+ExternalDNS automatically creates Route 53 DNS records when the infrastructure pipeline runs. But those records only resolve if your domain's nameservers are pointing to Route 53. **This must be done before you expect the live URLs to work.**
+
+### Find your Route 53 nameservers
+
+After the infrastructure pipeline runs (Step 4), Route 53 creates a hosted zone for `platinum-consults.com`. Get its nameservers:
+
+```bash
+ZONE_ID=$(aws route53 list-hosted-zones \
+  --query "HostedZones[?Name=='platinum-consults.com.'] | [0].Id" \
+  --output text | cut -d'/' -f3)
+
+aws route53 get-hosted-zone --id "$ZONE_ID" \
+  --query "DelegationSet.NameServers" --output table
+```
+
+You will get 4 nameservers that look like:
+```
+ns-XXXX.awsdns-XX.co.uk
+ns-XXXX.awsdns-XX.net
+ns-XXXX.awsdns-XX.com
+ns-XXXX.awsdns-XX.org
+```
+
+### Update your domain registrar
+
+1. Log in to wherever you registered `platinum-consults.com`
+2. Find the **nameserver / DNS** settings
+3. Replace the existing nameservers with the 4 Route 53 nameservers above
+4. Save — propagation takes 5–30 minutes
+
+> **Important:** Do NOT point the nameservers until after Step 4 has run and created the hosted zone. If you point too early (zone doesn't exist yet), update them once the pipeline completes.
+
+> **Verify propagation:**
+> ```bash
+> nslookup -type=NS platinum-consults.com 8.8.8.8
+> # Should show ns-XXXX.awsdns-XX.* — not your old registrar nameservers
+> ```
+
+---
+
+## Step 0b – Push Both Repos to GitHub
 
 > ArgoCD watches the platform repo live. Nothing deploys until code is on GitHub.
 > The Jenkins EC2 also downloads `setup-jcasc.sh` from GitHub on first boot.
@@ -214,9 +256,11 @@ All URLs are live once the infrastructure pipeline completes and DNS propagates 
 > # Accept the self-signed certificate warning in the browser
 > ```
 
-> **DNS propagation:** `platinum-consults.com`, `grafana.platinum-consults.com`, and
-> `prometheus.platinum-consults.com` are managed automatically by ExternalDNS.
-> Allow 2–5 minutes after the pipeline finishes for DNS to resolve.
+> **DNS prerequisite:** Your domain registrar must have Route 53 nameservers set (Step 0a).
+> Without this, the site will show your registrar's placeholder page regardless of whether
+> the ALB and ExternalDNS records are correct.
+> Once nameservers are pointed to Route 53, allow 2–5 minutes after the pipeline finishes
+> for ExternalDNS to create the A records and DNS to propagate.
 
 ---
 
