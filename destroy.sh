@@ -540,6 +540,23 @@ for ROLE in \
   fi
 done
 
+# EKS IAM policies — orphaned if Terraform state is lost or destroy fails midway
+echo "  Cleaning up EKS IAM policies..."
+for POLICY in \
+  nimbus-cluster-alb-controller-policy \
+  nimbus-cluster-external-dns-policy \
+  nimbus-cluster-nimbus-secrets-reader; do
+  ARN="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text 2>/dev/null):policy/${POLICY}"
+  if aws iam get-policy --policy-arn "$ARN" 2>/dev/null | grep -q "PolicyName"; then
+    for ROLE in $(aws iam list-entities-for-policy --policy-arn "$ARN" \
+        --query "PolicyRoles[].RoleName" --output text 2>/dev/null); do
+      aws iam detach-role-policy --role-name "$ROLE" --policy-arn "$ARN" 2>/dev/null || true
+    done
+    aws iam delete-policy --policy-arn "$ARN" 2>/dev/null || true
+    echo "    Deleted IAM policy: $POLICY"
+  fi
+done
+
 # RDS instances
 for DB in $(aws rds describe-db-instances --region "$REGION" \
     --query "DBInstances[].DBInstanceIdentifier" --output text 2>/dev/null); do
