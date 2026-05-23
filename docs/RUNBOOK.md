@@ -256,7 +256,7 @@ DynamoDB table are preserved intentionally – delete them manually only if done
 with the project:
 
 ```bash
-# S3 bucket has versioning enabled — must delete all versions before deleting bucket
+# S3 bucket has versioning enabled – must delete all versions before deleting bucket
 aws s3api delete-objects --bucket ibrahim-cloud-native-tf-state \
   --delete "$(aws s3api list-object-versions --bucket ibrahim-cloud-native-tf-state \
     --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json)"

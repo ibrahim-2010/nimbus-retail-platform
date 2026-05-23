@@ -313,7 +313,7 @@ nimbus-retail-platform/
 │
 ├── assets/                         # Architecture diagram + live platform screenshots
 ├── .github/workflows/ci.yml        # GitHub Actions – YAML validation + Terraform validate
-├── bootstrap.sh                    # Creates S3, DynamoDB, key pair – idempotent
+├── bootstrap.sh                    # Creates S3, DynamoDB, key pair, Route 53 zone – idempotent
 ├── destroy.sh                      # 11-phase ordered teardown, zero orphaned resources
 └── README.md
 ```
@@ -334,7 +334,7 @@ git add . && git commit -m "deploy" && git push origin main
 ```bash
 bash bootstrap.sh
 ```
-Creates S3 state bucket, DynamoDB lock table, EC2 key pair. Idempotent – safe to re-run.
+Creates S3 state bucket, DynamoDB lock table, EC2 key pair, and Route 53 hosted zone. Idempotent – safe to re-run.
 
 ### Step 3 – Deploy Jenkins Server (~5 min)
 ```bash

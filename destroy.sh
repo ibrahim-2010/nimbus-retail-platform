@@ -612,13 +612,23 @@ for SG in $(aws rds describe-db-subnet-groups --region "$REGION" \
 done
 
 # Delete ElastiCache subnet groups (block VPC deletion if left behind)
+# Retry up to 6 times — subnet group may still be locked briefly after cluster deletion
 echo "  Deleting ElastiCache subnet groups..."
 for SG in $(aws elasticache describe-cache-subnet-groups --region "$REGION" \
-    --query "CacheSubnetGroups[].CacheSubnetGroupName" --output text 2>/dev/null); do
+    --query "CacheSubnetGroups[?CacheSubnetGroupName!='default'].CacheSubnetGroupName" \
+    --output text 2>/dev/null); do
   [ "$SG" = "default" ] && continue
   echo "  Deleting ElastiCache subnet group: $SG"
-  aws elasticache delete-cache-subnet-group --cache-subnet-group-name "$SG" \
-    --region "$REGION" 2>/dev/null || true
+  for attempt in $(seq 1 6); do
+    if aws elasticache delete-cache-subnet-group --cache-subnet-group-name "$SG" \
+        --region "$REGION" 2>/dev/null; then
+      echo "    Deleted: $SG"
+      break
+    else
+      echo "    Attempt $attempt/6 failed — waiting 10s for cluster to fully release..."
+      sleep 10
+    fi
+  done
 done
 
 # Remaining EBS volumes

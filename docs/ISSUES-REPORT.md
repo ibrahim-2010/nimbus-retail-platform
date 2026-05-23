@@ -67,7 +67,7 @@ sh '''
 sh 'terraform apply -var-file="nimbus.tfvars" -auto-approve'
 ```
 
-> Note: NAT gateway and private route tables were added to Stage 1 targets after Issue 15 — nodes need outbound internet access to bootstrap. See Issue 15.
+> Note: NAT gateway and private route tables were added to Stage 1 targets after Issue 15 – nodes need outbound internet access to bootstrap. See Issue 15.
 
 **Files Changed:** `Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure`
 
@@ -403,13 +403,13 @@ sh '''
 
 ---
 
-## Issue 16 — NodeCreationFailure (Second Occurrence) — NAT Gateway No Path to Internet
+## Issue 16 – NodeCreationFailure (Second Occurrence) – NAT Gateway No Path to Internet
 
 **Symptom:**  
-Same as Issue 15 — nodes stuck in `NodeCreationFailure`, `nodeadm` retrying `EC2/DescribeInstances` indefinitely. Stage 1 now included NAT gateway and private route table targets, but the failure persisted.
+Same as Issue 15 – nodes stuck in `NodeCreationFailure`, `nodeadm` retrying `EC2/DescribeInstances` indefinitely. Stage 1 now included NAT gateway and private route table targets, but the failure persisted.
 
 **Root Cause:**  
-The NAT gateway existed and the private route table correctly pointed `0.0.0.0/0 → NAT`. However, the **public route table** (`aws_route_table.public`) was not in the Stage 1 target list. The public subnets fell back to the VPC main route table which had no internet gateway route. Without `0.0.0.0/0 → IGW` on the public subnet, the NAT gateway itself had no path to the internet — traffic from private subnets reached the NAT, then went nowhere.
+The NAT gateway existed and the private route table correctly pointed `0.0.0.0/0 → NAT`. However, the **public route table** (`aws_route_table.public`) was not in the Stage 1 target list. The public subnets fell back to the VPC main route table which had no internet gateway route. Without `0.0.0.0/0 → IGW` on the public subnet, the NAT gateway itself had no path to the internet – traffic from private subnets reached the NAT, then went nowhere.
 
 Confirmed by inspecting route tables: `rtb-06fb27588b632635f` (the nimbus VPC main table) had only a local route with no IGW entry.
 
@@ -460,4 +460,4 @@ sh '''
 | 13 | Database schemas missing | init-db.sql only runs in docker-compose | One-time Kubernetes Job against RDS |
 | 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |
 | 15 | NodeCreationFailure – nodes can't join cluster (first fix) | NAT gateway + private routes not created before node group | Added NAT gateway + private route table targets to Stage 1 |
-| 16 | NodeCreationFailure – nodes can't join cluster (second fix) | Public route table missing IGW route — NAT gateway had no path to internet | Added public route table + association targets to Stage 1 Terraform apply |
+| 16 | NodeCreationFailure – nodes can't join cluster (second fix) | Public route table missing IGW route – NAT gateway had no path to internet | Added public route table + association targets to Stage 1 Terraform apply |

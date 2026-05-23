@@ -1,4 +1,4 @@
-# NimbusRetail — Full Stack Deployment Guide
+# NimbusRetail – Full Stack Deployment Guide
 
 **Cluster:** nimbus-cluster | **Region:** us-east-1 | **Account:** 022374769206  
 **Total time:** ~45–55 min | **Cost while running:** ~$0.51/hr
@@ -9,14 +9,14 @@
 
 | Step | When | Where | What |
 |---|---|---|---|
-| 1 — Push repos to GitHub | One-time | Local | ArgoCD + JCasC pull from GitHub |
-| 2 — Bootstrap | One-time | Local (Git Bash) | S3, DynamoDB, key pair, Route 53 zone |
-| 3 — Update registrar nameservers | One-time (after Step 2) | Domain registrar | Point domain to Route 53 — never repeat |
-| 4 — Deploy Jenkins server | Every deployment | Local (Git Bash) | Provision Jenkins EC2 with SSH IP lock |
-| 5 — Configure Jenkins | Every deployment | SSH into Jenkins EC2 | Inject credentials, verify 6 jobs |
-| 6 — Infrastructure pipeline | Every deployment | Jenkins UI | EKS, RDS, Redis, ArgoCD, all k8s apps |
-| 7 — Service builds | Every deployment | Jenkins UI | Build + push 5 images, ArgoCD deploys |
-| 8 — Verify | Every deployment | Local | Check pods, URLs, smoke test |
+| 1 – Push repos to GitHub | One-time | Local | ArgoCD + JCasC pull from GitHub |
+| 2 – Bootstrap | One-time | Local (Git Bash) | S3, DynamoDB, key pair, Route 53 zone |
+| 3 – Update registrar nameservers | One-time (after Step 2) | Domain registrar | Point domain to Route 53 – never repeat |
+| 4 – Deploy Jenkins server | Every deployment | Local (Git Bash) | Provision Jenkins EC2 with SSH IP lock |
+| 5 – Configure Jenkins | Every deployment | SSH into Jenkins EC2 | Inject credentials, verify 6 jobs |
+| 6 – Infrastructure pipeline | Every deployment | Jenkins UI | EKS, RDS, Redis, ArgoCD, all k8s apps |
+| 7 – Service builds | Every deployment | Jenkins UI | Build + push 5 images, ArgoCD deploys |
+| 8 – Verify | Every deployment | Local | Check pods, URLs, smoke test |
 
 **Steps 1–3** are done once when you first set up the project.  
 **Steps 4–8** run every time you spin up the stack.
@@ -27,7 +27,7 @@
 
 | Resource | Instance | ~$/hr |
 |---|---|---|
-| EKS control plane | — | $0.10 |
+| EKS control plane | – | $0.10 |
 | 2× worker nodes | t3.xlarge | $0.33 |
 | RDS PostgreSQL | db.t3.micro | $0.017 |
 | ElastiCache Redis | cache.t3.micro | $0.017 |
@@ -38,9 +38,9 @@
 
 ## ONE-TIME SETUP
 
-### Step 1 — Push Both Repos to GitHub
+### Step 1 – Push Both Repos to GitHub
 
-> ArgoCD watches the platform repo live — nothing deploys until code is on GitHub.  
+> ArgoCD watches the platform repo live – nothing deploys until code is on GitHub.  
 > The Jenkins EC2 downloads `jcasc/jenkins.yaml` from GitHub on first boot.
 
 ```bash
@@ -61,7 +61,7 @@ git push origin main
 
 ---
 
-### Step 2 — Bootstrap (3 min, idempotent)
+### Step 2 – Bootstrap (3 min, idempotent)
 
 ```bash
 cd /c/Users/19122/nimbus-retail-platform
@@ -76,30 +76,30 @@ This creates:
 
 **Success:** Script prints `BOOTSTRAP COMPLETE` and displays 4 Route 53 nameservers.
 
-Safe to re-run at any time — every step checks before creating.
+Safe to re-run at any time – every step checks before creating.
 
 > **Where is test.pem?** It is saved in the repo root (`nimbus-retail-platform/test.pem`).
-> Keep it secure — it cannot be re-downloaded. If you re-run bootstrap and the key already
+> Keep it secure – it cannot be re-downloaded. If you re-run bootstrap and the key already
 > exists, the existing `.pem` file is used as-is.
 
 ---
 
-### Step 3 — Update Registrar Nameservers (ONE TIME ONLY)
+### Step 3 – Update Registrar Nameservers (ONE TIME ONLY)
 
 **Do this once after Step 2. The zone and its nameservers never change between deployments
-— once set at your registrar, you never need to touch this again.**
+– once set at your registrar, you never need to touch this again.**
 
 Bootstrap printed 4 nameservers. Copy them and update your domain registrar:
 
 1. Log in to wherever you registered `platinum-consults.com`
 2. Find **Nameservers / DNS** settings
 3. Replace all existing nameservers with the 4 from bootstrap output
-4. Save — propagation takes 5–30 minutes
+4. Save – propagation takes 5–30 minutes
 
 **Verify propagation before continuing:**
 ```bash
 nslookup -type=NS platinum-consults.com 8.8.8.8
-# Must show ns-XXXX.awsdns-XX.* — not your registrar's default nameservers
+# Must show ns-XXXX.awsdns-XX.* – not your registrar's default nameservers
 ```
 
 > If you already did this on a previous deployment, skip Step 3 entirely.
@@ -110,7 +110,7 @@ nslookup -type=NS platinum-consults.com 8.8.8.8
 
 ## EVERY DEPLOYMENT
 
-### Step 4 — Set SSH Restriction + Deploy Jenkins (5 min)
+### Step 4 – Set SSH Restriction + Deploy Jenkins (5 min)
 
 **Get your current public IP and lock SSH to it** (prevents abuse reports from open port 22):
 
@@ -140,8 +140,8 @@ terraform apply
 
 **Get connection details:**
 ```bash
-terraform output jenkins_public_ip   # note this IP — used in Steps 5–7
-terraform output ssh_command         # full ssh command — copy this
+terraform output jenkins_public_ip   # note this IP – used in Steps 5–7
+terraform output ssh_command         # full ssh command – copy this
 ```
 
 **Fix key permissions:**
@@ -156,7 +156,7 @@ chmod 400 ../test.pem
 
 ---
 
-### Step 5 — Configure Jenkins (10 min)
+### Step 5 – Configure Jenkins (10 min)
 
 **SSH in as ubuntu and watch the install log:**
 ```bash
@@ -183,8 +183,8 @@ Enter when prompted:
 | GitHub Username | `ibrahim-2010` |
 | GitHub PAT | your PAT with `repo` scope (read + write both repos) |
 | AWS Account ID | `022374769206` |
-| Jenkins Admin Password | choose a strong password — write it down |
-| AWS Access Key ID | **press Enter** — instance role handles all permissions |
+| Jenkins Admin Password | choose a strong password – write it down |
+| AWS Access Key ID | **press Enter** – instance role handles all permissions |
 
 **Success check:** The script output ends with:
 ```
@@ -198,7 +198,7 @@ exit
 ```
 
 Open Jenkins in a browser to verify 6 jobs are listed:
-- `http://<JENKINS_IP>:8080` — login: `admin` / your chosen password
+- `http://<JENKINS_IP>:8080` – login: `admin` / your chosen password
 
 Verify all 6 jobs exist:
 - `nimbus-infrastructure`
@@ -208,7 +208,7 @@ Verify all 6 jobs exist:
 - `nimbus-order-service`
 - `nimbus-notification-service`
 
-SonarQube is also available: `http://<JENKINS_IP>:9000` — login: `admin` / `SonarAdmin2026!`
+SonarQube is also available: `http://<JENKINS_IP>:9000` – login: `admin` / `SonarAdmin2026!`
 
 > **Only 2 jobs instead of 6?** This means `tools-install.sh` ran with a stale cached image
 > before the fix was applied. Re-run `setup-jcasc.sh` to reload JCasC from GitHub:
@@ -219,7 +219,7 @@ SonarQube is also available: `http://<JENKINS_IP>:9000` — login: `admin` / `So
 
 ---
 
-### Step 6 — Run the Infrastructure Pipeline (~30 min)
+### Step 6 – Run the Infrastructure Pipeline (~30 min)
 
 Open Jenkins: `http://<JENKINS_IP>:8080`
 
@@ -231,12 +231,12 @@ The pipeline runs these stages in sequence:
 |---|---|---|
 | Checkout | 1 min | Clones platform repo from GitHub |
 | Terraform Init | 2 min first run, 30s cached | Downloads AWS/Kubernetes/Helm providers |
-| Terraform Apply — EKS Cluster | 15 min | Public subnets, NAT gateway, private subnets + route tables, EKS cluster, node group |
-| Terraform Apply — Full Stack | 20 min | RDS, Redis, Strimzi Kafka, ESO, Kyverno, Loki, Tempo, Prometheus/Grafana, ECR, IRSA roles |
-| Configure kubectl | 30s | Updates `/var/lib/jenkins/.kube/config` — no manual step needed |
+| Terraform Apply – EKS Cluster | 15 min | Public subnets, NAT gateway, private subnets + route tables, EKS cluster, node group |
+| Terraform Apply – Full Stack | 20 min | RDS, Redis, Strimzi Kafka, ESO, Kyverno, Loki, Tempo, Prometheus/Grafana, ECR, IRSA roles |
+| Configure kubectl | 30s | Updates `/var/lib/jenkins/.kube/config` – no manual step needed |
 | Populate Secrets Manager | 1 min | Creates `nimbus-cluster/nimbus-secrets` and `nimbus-cluster/nimbus-catalog-secrets` with real RDS + Redis endpoints |
 | Install ArgoCD | 2 min | Installs ArgoCD, waits for it to be ready, **prints admin password** |
-| Deploy App-of-Apps | 30s | `kubectl apply -f argocd/app-of-apps.yaml` — ArgoCD takes over from here |
+| Deploy App-of-Apps | 30s | `kubectl apply -f argocd/app-of-apps.yaml` – ArgoCD takes over from here |
 | Initialize Database | 2 min | Runs psql Kubernetes Job to create all schemas and seed catalog products against RDS |
 
 **At the end of the pipeline, look for in the console output:**
@@ -246,7 +246,7 @@ ArgoCD server URL:     <copy this>
 Pipeline complete.
 ```
 
-**After pipeline succeeds — verify ArgoCD sync from local machine:**
+**After pipeline succeeds – verify ArgoCD sync from local machine:**
 ```bash
 # Configure kubectl locally
 aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
@@ -255,7 +255,7 @@ aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
 kubectl get applications -n argocd
 ```
 
-Expected output — all apps `Synced` + `Healthy`:
+Expected output – all apps `Synced` + `Healthy`:
 ```
 NAME                    SYNC STATUS   HEALTH STATUS
 nimbus-app-of-apps      Synced        Healthy
@@ -266,20 +266,20 @@ nimbus-monitoring       Synced        Healthy
 ...
 ```
 
-> **Kafka takes ~5 min** to elect a KRaft leader — it will show `Progressing` briefly,
+> **Kafka takes ~5 min** to elect a KRaft leader – it will show `Progressing` briefly,
 > then become `Healthy`. All other apps sync in 2–3 min.
 
 > **ArgoCD URL:** printed in pipeline output. Also retrieve anytime:
 > ```bash
 > kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 > ```
-> Open at `https://<that-value>` — accept the self-signed certificate warning.
+> Open at `https://<that-value>` – accept the self-signed certificate warning.
 
 ---
 
-### Step 7 — Trigger Service Builds
+### Step 7 – Trigger Service Builds
 
-Still in Jenkins — run each job once (**Build with Parameters → Build**):
+Still in Jenkins – run each job once (**Build with Parameters → Build**):
 
 | Job | Service built |
 |---|---|
@@ -289,7 +289,7 @@ Still in Jenkins — run each job once (**Build with Parameters → Build**):
 | `nimbus-order-service` | order-service |
 | `nimbus-notification-service` | notification-service |
 
-All 5 can be triggered at the same time — they are independent.
+All 5 can be triggered at the same time – they are independent.
 
 Each build runs: SonarQube scan → Trivy image scan → Docker build → ECR push → Helm values update → ArgoCD rollout.
 
@@ -299,7 +299,7 @@ In ArgoCD, all service apps show `Running 1/1` after the rollout completes.
 
 ---
 
-### Step 8 — Verify the Deployment
+### Step 8 – Verify the Deployment
 
 Run these from your local machine:
 
@@ -352,7 +352,7 @@ kubectl exec -n nimbus deploy/auth-service -- wget -qO- http://localhost:3001/he
 **Check DNS (allow 2–5 min after pipeline for ExternalDNS to write the A record):**
 ```bash
 nslookup platinum-consults.com 8.8.8.8
-# Expected: returns ALB IP — no NXDOMAIN
+# Expected: returns ALB IP – no NXDOMAIN
 
 curl -s -o /dev/null -w "%{http_code}" http://platinum-consults.com
 # Expected: 200
@@ -380,7 +380,7 @@ All URLs are live once the infrastructure pipeline completes and DNS propagates 
 
 ## Secret Management
 
-All credentials are randomly generated and stored in AWS Secrets Manager — nothing is hardcoded in code or config files.
+All credentials are randomly generated and stored in AWS Secrets Manager – nothing is hardcoded in code or config files.
 
 | Secret path | Contents | Created by |
 |---|---|---|
@@ -407,7 +407,7 @@ bash destroy.sh
 
 Takes ~15 min. Runs 11 phases in dependency order.
 
-The Route 53 hosted zone is **intentionally preserved** — nameservers at your registrar stay valid for the next deployment.
+The Route 53 hosted zone is **intentionally preserved** – nameservers at your registrar stay valid for the next deployment.
 
 After destroy.sh finishes, verify everything is clean:
 ```bash
@@ -439,23 +439,23 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `nimbus-infrastructure` fails at Terraform Init | Provider download timeout | Re-run the job — transient network issue |
-| `nimbus-infrastructure` fails at Terraform Apply — EKS Cluster | IAM permissions or network issue | Check Jenkins EC2 instance role has all 8 policies; check route tables in VPC |
-| `nimbus-infrastructure` fails at Terraform Apply — Full Stack | IAM permission issue | Check Jenkins EC2 instance role; re-run job |
+| `nimbus-infrastructure` fails at Terraform Init | Provider download timeout | Re-run the job – transient network issue |
+| `nimbus-infrastructure` fails at Terraform Apply – EKS Cluster | IAM permissions or network issue | Check Jenkins EC2 instance role has all 8 policies; check route tables in VPC |
+| `nimbus-infrastructure` fails at Terraform Apply – Full Stack | IAM permission issue | Check Jenkins EC2 instance role; re-run job |
 | Only 2 jobs in Jenkins instead of 6 | JCasC loaded from stale cached image | Re-run `sudo bash /opt/setup-jcasc.sh` on the Jenkins EC2 |
-| `data.aws_route53_zone.main` not found | Route 53 zone doesn't exist | Run `bash bootstrap.sh` — it creates the zone idempotently |
+| `data.aws_route53_zone.main` not found | Route 53 zone doesn't exist | Run `bash bootstrap.sh` – it creates the zone idempotently |
 | ArgoCD app stuck `OutOfSync` | Kyverno blocking | `kubectl get policyreport -n nimbus` |
 | ESO `SecretSyncedError` | Secrets not yet in Secrets Manager | Check pipeline Populate Secrets Manager stage output; re-run pipeline if needed |
 | Pod `ImagePullBackOff` | Service build job not run yet | Trigger that service's Jenkins build job |
-| Pod crash — `secret not found` | ESO hasn't synced yet | `kubectl annotate externalsecret nimbus-secrets -n nimbus force-sync=$(date +%s) --overwrite` |
-| Kafka pods pending | EBS volume not provisioned | `kubectl describe pod -n kafka` — check StorageClass is `gp3` |
+| Pod crash – `secret not found` | ESO hasn't synced yet | `kubectl annotate externalsecret nimbus-secrets -n nimbus force-sync=$(date +%s) --overwrite` |
+| Kafka pods pending | EBS volume not provisioned | `kubectl describe pod -n kafka` – check StorageClass is `gp3` |
 | ArgoCD password not shown in output | Secret already rotated | `kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' \| base64 -d` |
 | Register returns `relation "auth.users" does not exist` | Database Initialize stage failed | Re-run db-init Job: `kubectl delete job db-init -n nimbus --ignore-not-found && kubectl apply -f <job-yaml>` |
-| Services 0/1, logs show `no encryption` | DATABASE_URL missing `?sslmode=require` | Check `nimbus-cluster/nimbus-secrets` in Secrets Manager — URL must end with `?sslmode=require` |
-| `platinum-consults.com` shows registrar page | Nameservers not updated at registrar | Complete Step 3 — update registrar nameservers to the 4 Route 53 nameservers from bootstrap output |
+| Services 0/1, logs show `no encryption` | DATABASE_URL missing `?sslmode=require` | Check `nimbus-cluster/nimbus-secrets` in Secrets Manager – URL must end with `?sslmode=require` |
+| `platinum-consults.com` shows registrar page | Nameservers not updated at registrar | Complete Step 3 – update registrar nameservers to the 4 Route 53 nameservers from bootstrap output |
 | `platinum-consults.com` returns NXDOMAIN | DNS not propagated yet | Wait 5–30 min after updating registrar nameservers; verify with `nslookup -type=NS platinum-consults.com 8.8.8.8` |
-| Site resolves but shows 503 on API calls | ALB health check wrong | Should be auto-fixed — check `alb.ingress.kubernetes.io/healthcheck-path: /healthz` in ingress |
-| ExternalDNS AccessDenied on Route 53 | Two hosted zones exist (orphan from old deployment) | `aws route53 list-hosted-zones` — identify and delete the orphan zone that doesn't match bootstrap's zone ID |
+| Site resolves but shows 503 on API calls | ALB health check wrong | Should be auto-fixed – check `alb.ingress.kubernetes.io/healthcheck-path: /healthz` in ingress |
+| ExternalDNS AccessDenied on Route 53 | Two hosted zones exist (orphan from old deployment) | `aws route53 list-hosted-zones` – identify and delete the orphan zone that doesn't match bootstrap's zone ID |
 
 ---
 
