@@ -26,6 +26,7 @@ REGION="us-east-1"
 S3_BUCKET="ibrahim-cloud-native-tf-state"
 DYNAMO_TABLE="ibrahim-cloud-native-tf-lock"
 KEY_NAME="test"
+DOMAIN="platinum-consults.com"
 
 echo -e "${GREEN}"
 echo "╔══════════════════════════════════════════════════╗"
@@ -33,8 +34,8 @@ echo "║     NimbusRetail — Bootstrap                     ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# ─── [1/6] S3 Bucket for Terraform State ─────────────────────────────────────
-echo -e "${YELLOW}[1/6] Creating S3 bucket for Terraform state...${NC}"
+# ─── [1/7] S3 Bucket for Terraform State ─────────────────────────────────────
+echo -e "${YELLOW}[1/7] Creating S3 bucket for Terraform state...${NC}"
 if aws s3api head-bucket --bucket "$S3_BUCKET" --region "$REGION" 2>/dev/null; then
   echo "  Bucket $S3_BUCKET already exists — skipping creation"
 else
@@ -68,8 +69,8 @@ aws s3api put-public-access-block \
     "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
 echo "  Public access: fully blocked"
 
-# ─── [2/6] DynamoDB Table for State Locking ──────────────────────────────────
-echo -e "${YELLOW}[2/6] Creating DynamoDB table for state locking...${NC}"
+# ─── [2/7] DynamoDB Table for State Locking ──────────────────────────────────
+echo -e "${YELLOW}[2/7] Creating DynamoDB table for state locking...${NC}"
 if aws dynamodb describe-table --table-name "$DYNAMO_TABLE" --region "$REGION" 2>/dev/null | grep -q "ACTIVE"; then
   echo "  Table $DYNAMO_TABLE already exists — skipping"
 else
@@ -84,13 +85,13 @@ else
   echo "  Status: ACTIVE"
 fi
 
-# ─── [3/6] ECR Repositories ──────────────────────────────────────────────────
-echo -e "${YELLOW}[3/6] ECR repositories...${NC}"
+# ─── [3/7] ECR Repositories ──────────────────────────────────────────────────
+echo -e "${YELLOW}[3/7] ECR repositories...${NC}"
 echo "  Nimbus ECR repos (nimbus/auth-service etc.) are created by EKS-Terraform/ecr.tf"
 echo "  Nothing to create here — skipping"
 
-# ─── [4/6] EC2 Key Pair ──────────────────────────────────────────────────────
-echo -e "${YELLOW}[4/6] Creating EC2 key pair...${NC}"
+# ─── [4/7] EC2 Key Pair ──────────────────────────────────────────────────────
+echo -e "${YELLOW}[4/7] Creating EC2 key pair...${NC}"
 if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$REGION" 2>/dev/null | grep -q "$KEY_NAME"; then
   echo "  Key pair '$KEY_NAME' already exists — skipping"
 else
@@ -103,14 +104,45 @@ else
   echo "  Created: ${KEY_NAME}.pem — save this file securely, it cannot be re-downloaded"
 fi
 
-# ─── [5/6] Verify AWS Identity ───────────────────────────────────────────────
-echo -e "${YELLOW}[5/6] Verifying AWS identity...${NC}"
+# ─── [5/7] Verify AWS Identity ───────────────────────────────────────────────
+echo -e "${YELLOW}[5/7] Verifying AWS identity...${NC}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 echo "  Account: $ACCOUNT_ID"
 echo "  Region:  $REGION"
 
-# ─── [6/6] Clean Orphan Jenkins Resources ────────────────────────────────────
-echo -e "${YELLOW}[6/6] Cleaning orphan Jenkins resources from previous deployments...${NC}"
+# ─── [6/7] Route 53 Hosted Zone ──────────────────────────────────────────────
+# The zone is created here (not in Terraform) so nameservers never change
+# between deployments. Terraform references it as a data source.
+echo -e "${YELLOW}[6/7] Creating Route 53 hosted zone for $DOMAIN...${NC}"
+ZONE_ID=$(aws route53 list-hosted-zones \
+  --query "HostedZones[?Name=='${DOMAIN}.'].Id" \
+  --output text 2>/dev/null | sed 's|/hostedzone/||' | head -1)
+
+if [ -n "$ZONE_ID" ] && [ "$ZONE_ID" != "None" ]; then
+  echo "  Zone for $DOMAIN already exists: $ZONE_ID — skipping creation"
+else
+  CALLER_REF="nimbus-$(date +%s)"
+  ZONE_ID=$(aws route53 create-hosted-zone \
+    --name "$DOMAIN" \
+    --caller-reference "$CALLER_REF" \
+    --query "HostedZone.Id" \
+    --output text | sed 's|/hostedzone/||')
+  echo "  Created zone: $ZONE_ID"
+fi
+
+echo ""
+echo -e "${GREEN}  Route 53 nameservers for $DOMAIN:${NC}"
+aws route53 get-hosted-zone --id "$ZONE_ID" \
+  --query "DelegationSet.NameServers" --output text \
+  | tr '\t' '\n' | while read -r ns; do echo "    $ns"; done
+echo ""
+echo -e "${YELLOW}  >>> IMPORTANT: If this is your first deployment, update your domain"
+echo -e "  >>> registrar to use these 4 nameservers. This is a ONE-TIME step."
+echo -e "  >>> Nameservers never change between deployments — once set, skip this forever.${NC}"
+echo ""
+
+# ─── [7/7] Clean Orphan Jenkins Resources ────────────────────────────────────
+echo -e "${YELLOW}[7/7] Cleaning orphan Jenkins resources from previous deployments...${NC}"
 aws iam remove-role-from-instance-profile \
   --instance-profile-name jenkins-nimbus-profile \
   --role-name jenkins-nimbus-role 2>/dev/null && echo "  Removed role from profile" || true
@@ -150,6 +182,7 @@ echo "Resources ready:"
 echo "  S3 Bucket:       $S3_BUCKET  (versioned, encrypted, public-access-blocked)"
 echo "  DynamoDB Table:  $DYNAMO_TABLE"
 echo "  Key Pair:        $KEY_NAME  → ${KEY_NAME}.pem"
+echo "  Route 53 Zone:   $ZONE_ID  ($DOMAIN)"
 echo "  Account ID:      $ACCOUNT_ID"
 echo ""
 echo "  Nimbus ECR repos (nimbus/auth-service etc.) are created by Terraform."

@@ -480,6 +480,9 @@ if [ -n "$EKS_DIR" ]; then
   terraform state rm helm_release.strimzi            2>/dev/null || true
   terraform state rm helm_release.eso                2>/dev/null || true
   terraform state rm helm_release.kyverno            2>/dev/null || true
+  # Preserve the Route 53 zone — nameservers must never change between deployments.
+  # The zone is managed by bootstrap.sh (created once) and referenced as a data source.
+  terraform state rm aws_route53_zone.main 2>/dev/null || true
 
   terraform init -input=false 2>/dev/null
 

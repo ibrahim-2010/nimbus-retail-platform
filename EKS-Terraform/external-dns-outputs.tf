@@ -4,12 +4,12 @@
 
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID"
-  value       = aws_route53_zone.main.zone_id
+  value       = data.aws_route53_zone.main.zone_id
 }
 
 output "route53_nameservers" {
-  description = "Route 53 nameservers — update these at your domain registrar"
-  value       = aws_route53_zone.main.name_servers
+  description = "Route 53 nameservers (set once at registrar — never changes between deployments)"
+  value       = data.aws_route53_zone.main.name_servers
 }
 
 output "external_dns_role_arn" {

@@ -11,13 +11,12 @@ variable "domain_name" {
   default     = "platinum-consults.com"
 }
 
-# Route 53 Hosted Zone (created declaratively)
-resource "aws_route53_zone" "main" {
-  name = var.domain_name
-
-  tags = {
-    Project = "nimbus-retail-platform"
-  }
+# Route 53 Hosted Zone — looked up by name, NOT created here.
+# The zone is created once in bootstrap.sh and persists across all deployments,
+# so nameservers at the registrar never need to change.
+data "aws_route53_zone" "main" {
+  name         = var.domain_name
+  private_zone = false
 }
 
 # IAM Policy for ExternalDNS
@@ -34,7 +33,7 @@ resource "aws_iam_policy" "external_dns" {
           "route53:ChangeResourceRecordSets"
         ]
         Resource = [
-          "arn:aws:route53:::hostedzone/${aws_route53_zone.main.zone_id}"
+          "arn:aws:route53:::hostedzone/${data.aws_route53_zone.main.zone_id}"
         ]
       },
       {
