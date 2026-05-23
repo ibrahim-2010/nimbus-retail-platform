@@ -38,20 +38,20 @@ resource "aws_security_group" "jenkins_sg" {
 
   # Jenkins UI
   ingress {
-    description = "Jenkins web UI"
+    description = "Jenkins web UI - restrict to your IP via ssh_allowed_cidr in terraform.tfvars"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.ssh_allowed_cidr]
   }
 
   # SonarQube
   ingress {
-    description = "SonarQube web UI"
+    description = "SonarQube web UI - restrict to your IP via ssh_allowed_cidr in terraform.tfvars"
     from_port   = 9000
     to_port     = 9000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.ssh_allowed_cidr]
   }
 
   # All outbound

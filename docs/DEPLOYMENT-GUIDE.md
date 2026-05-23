@@ -112,7 +112,7 @@ nslookup -type=NS platinum-consults.com 8.8.8.8
 
 ### Step 4 – Set SSH Restriction + Deploy Jenkins (5 min)
 
-**Get your current public IP and lock SSH to it** (prevents abuse reports from open port 22):
+**Get your current public IP and lock all Jenkins ports to it:**
 
 ```bash
 curl ifconfig.me
@@ -130,6 +130,12 @@ Verify it looks correct:
 cat terraform.tfvars
 # Expected: ssh_allowed_cidr = "x.x.x.x/32"
 ```
+
+> **Security:** `ssh_allowed_cidr` locks **all three ports** -SSH (22), Jenkins UI (8080), and
+> SonarQube (9000) -to your IP only. Never leave 8080 or 9000 open to `0.0.0.0/0`. Exposed
+> Jenkins instances are discovered and exploited within hours via the Groovy script console,
+> causing AWS to issue an abuse report (`AWS_ABUSE_DOS_REPORT`) that can lead to account
+> suspension. This was fixed in Terraform -the variable now controls all three ports.
 
 **Deploy:**
 ```bash
@@ -149,7 +155,15 @@ terraform output ssh_command         # full ssh command – copy this
 chmod 400 ../test.pem
 ```
 
-**Success:** `terraform apply` exits 0, `jenkins_public_ip` shows a valid IP address.
+**Verify security group -confirm no port is open to 0.0.0.0/0:**
+```bash
+aws ec2 describe-security-groups --group-names jenkins-nimbus-sg --region us-east-1 \
+  --query "SecurityGroups[0].IpPermissions[*].{Port:FromPort,CIDR:IpRanges[0].CidrIp}" \
+  --output table
+# Expected: all 3 rows show YOUR IP (/32) -never 0.0.0.0/0
+```
+
+**Success:** `terraform apply` exits 0, `jenkins_public_ip` shows a valid IP address, all ports show your IP in the security group check.
 
 > **IP changed since last session?** Re-run `curl ifconfig.me`, update `terraform.tfvars`,
 > then run `terraform apply` again to update the security group rule. Home IPs change.
