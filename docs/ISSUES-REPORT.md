@@ -403,6 +403,44 @@ sh '''
 
 ---
 
+## Issue 16 — NodeCreationFailure (Second Occurrence) — NAT Gateway No Path to Internet
+
+**Symptom:**  
+Same as Issue 15 — nodes stuck in `NodeCreationFailure`, `nodeadm` retrying `EC2/DescribeInstances` indefinitely. Stage 1 now included NAT gateway and private route table targets, but the failure persisted.
+
+**Root Cause:**  
+The NAT gateway existed and the private route table correctly pointed `0.0.0.0/0 → NAT`. However, the **public route table** (`aws_route_table.public`) was not in the Stage 1 target list. The public subnets fell back to the VPC main route table which had no internet gateway route. Without `0.0.0.0/0 → IGW` on the public subnet, the NAT gateway itself had no path to the internet — traffic from private subnets reached the NAT, then went nowhere.
+
+Confirmed by inspecting route tables: `rtb-06fb27588b632635f` (the nimbus VPC main table) had only a local route with no IGW entry.
+
+**Fix:**  
+Added `aws_route_table.public` and `aws_route_table_association.public` to Stage 1 targets, ensuring the full routing chain is in place before the node group is created:
+
+```
+Public subnet → aws_route_table.public (0.0.0.0/0 → IGW)
+Private subnet → aws_route_table.private (0.0.0.0/0 → NAT)
+NAT gateway → public subnet → IGW → internet
+```
+
+```groovy
+sh '''
+    terraform apply \
+      -target=aws_route_table.public \
+      -target=aws_route_table_association.public \
+      -target=aws_nat_gateway.main \
+      -target=aws_route_table.private \
+      -target=aws_route_table_association.private \
+      -target=aws_eks_cluster.main \
+      -target=aws_eks_node_group.main \
+      -var-file="nimbus.tfvars" \
+      -auto-approve
+'''
+```
+
+**Files Changed:** `Jenkins-Pipeline-Code/Jenkinsfile-Infrastructure`
+
+---
+
 ## Summary Table
 
 | # | Issue | Root Cause | Fix |
@@ -421,4 +459,5 @@ sh '''
 | 12 | ALB 503 on API calls | Wrong health check path (/) | Changed to /healthz + nginx config |
 | 13 | Database schemas missing | init-db.sql only runs in docker-compose | One-time Kubernetes Job against RDS |
 | 14 | Kyverno blocked Job | Missing resource limits | Added requests/limits to Job spec |
-| 15 | NodeCreationFailure – nodes can't join cluster | NAT gateway + private routes not created before node group | Added NAT gateway + route table targets to Stage 1 Terraform apply |
+| 15 | NodeCreationFailure – nodes can't join cluster (first fix) | NAT gateway + private routes not created before node group | Added NAT gateway + private route table targets to Stage 1 |
+| 16 | NodeCreationFailure – nodes can't join cluster (second fix) | Public route table missing IGW route — NAT gateway had no path to internet | Added public route table + association targets to Stage 1 Terraform apply |
