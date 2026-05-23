@@ -25,7 +25,7 @@ The project was built to reflect how a real platform engineering team operates: 
 
 The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Grafana, Loki, Tempo, Kyverno, ESO – deploys from a single Jenkins pipeline with zero manual Kubernetes or AWS steps after initial setup.
 
-> **15 real production issues** encountered and resolved across deployment cycles. Every root cause and fix is documented in [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) – not a tutorial, not a happy path.
+> **16 real production issues** encountered and resolved across deployment cycles. Every root cause and fix is documented in [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) – not a tutorial, not a happy path.
 
 ---
 
@@ -85,7 +85,7 @@ This project was built to reflect production platform engineering practices – 
 - **SDD** (System Design Document) with full AWS architecture diagram
 - **5 Architecture Decision Records** – every major technology choice is justified with alternatives considered
 - **Operational Runbook** – 11 day-2 procedures (rollback, scale, rotate secrets, investigate lag)
-- **Issues Report** – 15 production issues documented with root cause, fix, and lesson learned
+- **Issues Report** – 16 production issues documented with root cause, fix, and lesson learned
 - **Deployment Guide** – step-by-step with secret management strategy and credential rotation
 
 ---
@@ -209,7 +209,7 @@ Every major technology choice is documented with the alternative considered and 
 
 ## Key Engineering Challenges
 
-**15 production issues resolved** across multiple deployment cycles. This is not a tutorial – these are real failures with real debugging and real fixes. Full report: [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md).
+**16 production issues resolved** across multiple deployment cycles. This is not a tutorial – these are real failures with real debugging and real fixes. Full report: [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md).
 
 | # | Issue | Root Cause | Fix | Lesson |
 |---|---|---|---|---|
@@ -228,6 +228,7 @@ Every major technology choice is documented with the alternative considered and 
 | 13 | Orphan IAM roles block fresh deployment | Previous `terraform destroy` left EKS IAM roles behind | Added role cleanup loop to `destroy.sh` phase 9b fallback | Terraform state loss = orphan resources; destroy scripts must not rely on state alone |
 | 14 | Kyverno blocked db-init Job | Job container had no resource limits – violated `require-resource-limits` policy | Added `requests` and `limits` to Job container spec | Enforce policies apply to ALL workloads including one-off Jobs |
 | 15 | EKS nodes fail to join cluster (NodeCreationFailure) | NAT gateway not created before node group – nodes in private subnets had no outbound route | Added `aws_nat_gateway.main`, `aws_route_table.private`, `aws_route_table_association.private` to Stage 1 `-target` list | Nodes bootstrap by calling AWS APIs – private subnets need NAT before nodes launch |
+| 16 | NodeCreationFailure persists after Issue 15 fix | Public route table missing IGW route – NAT gateway had no path to internet | Added `aws_route_table.public`, `aws_route_table_association.public` to Stage 1 `-target` list | NAT needs the full chain: private RT → NAT → public RT → IGW – all must exist before nodes boot |
 
 ---
 
@@ -306,7 +307,7 @@ nimbus-retail-platform/
 ├── docs/
 │   ├── SDD.md                      # System Design Document + AWS architecture diagram
 │   ├── DEPLOYMENT-GUIDE.md         # Full deployment walkthrough + secret management + rotation
-│   ├── ISSUES-REPORT.md            # 15 production issues – root cause + fix + lesson
+│   ├── ISSUES-REPORT.md            # 16 production issues – root cause + fix + lesson
 │   ├── RUNBOOK.md                  # Day-2 operations – rollback, scale, rotate, investigate
 │   └── ADRs/                       # 5 Architecture Decision Records
 │
@@ -431,7 +432,7 @@ bash destroy.sh
 |---|---|
 | [`docs/SDD.md`](docs/SDD.md) | System Design Document – full AWS architecture diagram |
 | [`docs/DEPLOYMENT-GUIDE.md`](docs/DEPLOYMENT-GUIDE.md) | Step-by-step deployment, secret management strategy, credential rotation |
-| [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) | 15 production issues – root cause, fix, and lesson for each |
+| [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) | 16 production issues – root cause, fix, and lesson for each |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Day-2 operations – scaling, rollback, secret rotation, incident investigation |
 | [`docs/ADRs/`](docs/ADRs/) | 5 Architecture Decision Records with alternatives and rationale |
 
