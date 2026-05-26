@@ -488,6 +488,6 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 | ArgoCD | `https://$(kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')` |
 | Infrastructure pipeline | `nimbus-infrastructure` job in Jenkins |
 | Service pipelines | `nimbus-auth/catalog/cart/order/notification-service` |
-| Platform repo | `C:\Users\19122\nimbus-retail-platform` |
-| App repo | `C:\Users\19122\Desktop\nimbus-retail-starter` |
+| Platform repo | `https://github.com/ibrahim-2010/nimbus-retail-platform` |
+| App repo | `https://github.com/ibrahim-2010/nimbus-retail-starter` |
 | Runbook | `nimbus-retail-platform/docs/RUNBOOK.md` |
