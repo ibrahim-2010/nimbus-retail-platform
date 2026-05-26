@@ -33,6 +33,8 @@ The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Gr
 
 ![NimbusRetail AWS Architecture](assets/nimbus-architecture.png)
 
+![NimbusRetail](assets/app-live.png)
+
 ---
 
 ## Platform Engineering Skills Demonstrated
