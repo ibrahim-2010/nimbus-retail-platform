@@ -15,6 +15,9 @@ spec:
       labels:
         {{- include "nimbus-service.labels" . | nindent 8 }}
     spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "nimbus-service.name" . }}
+      {{- end }}
       containers:
         - name: {{ include "nimbus-service.name" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

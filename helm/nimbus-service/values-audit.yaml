@@ -1,0 +1,57 @@
+serviceName: audit-service
+
+image:
+  repository: 022374769206.dkr.ecr.us-east-1.amazonaws.com/nimbus/audit-service
+  tag: "1"
+
+service:
+  port: 3006
+  targetPort: 3006
+
+env:
+  - name: PORT
+    value: "3006"
+  - name: SERVICE_NAME
+    value: "audit-service"
+  - name: KAFKA_BROKERS
+    value: "nimbus-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+
+envFromSecrets:
+  - nimbus-secrets
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "300m"
+
+probes:
+  enabled: true
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  path: /metrics
+  interval: 30s

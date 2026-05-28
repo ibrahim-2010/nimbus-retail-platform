@@ -66,7 +66,7 @@ spec:
                     memory: "?*"
                     cpu: "?*"
 
-# ── 3. Disallow latest image tag (audit) ──────────────────────────────────────
+# ── 3. Disallow latest image tag (enforce) ────────────────────────────────────
 ---
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
@@ -76,11 +76,11 @@ metadata:
     policies.kyverno.io/title: Disallow Latest Tag
     policies.kyverno.io/severity: medium
     policies.kyverno.io/description: >
-      Using :latest makes deployments non-deterministic and prevents
-      rollbacks. The Jenkins pipeline always tags images with the build number.
-      Set to audit so existing deployments are not blocked during roll-out.
+      Using :latest makes deployments non-deterministic and prevents rollbacks.
+      The Jenkins pipeline always tags images with the build number.
+      Hard-blocked in Enforce mode — pods with :latest will be rejected at admission.
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: check-image-tag

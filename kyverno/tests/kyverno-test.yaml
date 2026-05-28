@@ -1,0 +1,24 @@
+name: nimbus-policy-tests
+policies:
+  - ../../Kubernetes-Manifests-file/Security/kyverno-policies.yaml
+resources:
+  - resources/
+results:
+  # ── require-resource-limits ───────────────────────────────────────────────
+  - policy: require-resource-limits
+    rule: check-limits
+    resource: pod-with-limits
+    result: pass
+  - policy: require-resource-limits
+    rule: check-limits
+    resource: pod-missing-limits
+    result: fail
+  # ── disallow-latest-tag ───────────────────────────────────────────────────
+  - policy: disallow-latest-tag
+    rule: check-image-tag
+    resource: pod-with-pinned-tag
+    result: pass
+  - policy: disallow-latest-tag
+    rule: check-image-tag
+    resource: pod-with-latest-tag
+    result: fail

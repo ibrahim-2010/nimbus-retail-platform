@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nimbus-audit
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ibrahim-2010/nimbus-retail-platform.git
+    targetRevision: main
+    path: helm/nimbus-service
+    helm:
+      valueFiles:
+        - values-audit.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nimbus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

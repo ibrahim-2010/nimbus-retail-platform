@@ -46,3 +46,15 @@ hpa:
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
+
+serviceAccount:
+  create: false
+  annotations: {}  # Use for IRSA: eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/ROLE
+
+networkPolicy:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  interval: 30s
