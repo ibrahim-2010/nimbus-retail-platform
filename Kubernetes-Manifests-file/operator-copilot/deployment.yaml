@@ -1,0 +1,72 @@
+# Before applying, create the API key secret (not committed to git):
+#
+#   kubectl create secret generic operator-copilot-secrets \
+#     -n operator-copilot \
+#     --from-literal=ANTHROPIC_API_KEY=<your-key>
+#
+# Build and push the image:
+#
+#   aws ecr get-login-password --region us-east-1 | \
+#     docker login --username AWS --password-stdin \
+#     022374769216.dkr.ecr.us-east-1.amazonaws.com
+#   docker build -t operator-copilot .  # run from operator-copilot-starter/
+#   docker tag operator-copilot:latest \
+#     022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+#   docker push 022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+#
+# Connect to the running agent:
+#
+#   kubectl attach -it -n operator-copilot deploy/operator-copilot
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: operator-copilot
+  namespace: operator-copilot
+  labels:
+    app: operator-copilot
+    project: nimbus-retail-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: operator-copilot
+  template:
+    metadata:
+      labels:
+        app: operator-copilot
+        project: nimbus-retail-platform
+    spec:
+      serviceAccountName: operator-copilot
+      containers:
+        - name: operator-copilot
+          image: 022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+          stdin: true
+          tty: true
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: operator-copilot-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: AUDIT_LOG_PATH
+              value: /audit/audit.log.jsonl
+            - name: ALERTMANAGER_URL
+              value: http://alertmanager-operated.monitoring:9093
+            - name: KAFKA_BOOTSTRAP
+              value: nimbus-kafka-bootstrap.nimbus:9092
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: audit
+              mountPath: /audit
+      volumes:
+        # Audit log survives container restarts within the pod lifetime.
+        # For durable audit storage, replace with a PVC.
+        - name: audit
+          emptyDir: {}
