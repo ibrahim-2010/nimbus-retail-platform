@@ -8,11 +8,11 @@
 #
 #   aws ecr get-login-password --region us-east-1 | \
 #     docker login --username AWS --password-stdin \
-#     022374769216.dkr.ecr.us-east-1.amazonaws.com
+#     022374769206.dkr.ecr.us-east-1.amazonaws.com
 #   docker build -t operator-copilot .  # run from operator-copilot-starter/
 #   docker tag operator-copilot:latest \
-#     022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
-#   docker push 022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+#     022374769206.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+#   docker push 022374769206.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
 #
 # Connect to the running agent:
 #
@@ -40,7 +40,7 @@ spec:
       serviceAccountName: operator-copilot
       containers:
         - name: operator-copilot
-          image: 022374769216.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
+          image: 022374769206.dkr.ecr.us-east-1.amazonaws.com/operator-copilot:latest
           stdin: true
           tty: true
           env:
