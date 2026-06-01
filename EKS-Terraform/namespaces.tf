@@ -59,3 +59,25 @@ resource "kubernetes_namespace" "nimbus" {
 
   depends_on = [aws_eks_node_group.main]
 }
+
+resource "kubernetes_namespace" "ai" {
+  metadata {
+    name = "ai"
+    labels = {
+      project = "nimbus-retail-platform"
+    }
+  }
+
+  depends_on = [aws_eks_node_group.main]
+}
+
+resource "kubernetes_namespace" "operator_copilot" {
+  metadata {
+    name = "operator-copilot"
+    labels = {
+      project = "nimbus-retail-platform"
+    }
+  }
+
+  depends_on = [aws_eks_node_group.main]
+}

@@ -1,0 +1,112 @@
+# ──────────────────────────────────────────────
+#  Ollama — self-hosted LLM inference server
+#  Namespace: ai
+#  Pilot 2 — Phase 3
+# ──────────────────────────────────────────────
+
+# PersistentVolumeClaim — stores downloaded model weights across pod restarts.
+# 20 Gi covers several small models (llama3.2:3b ~2 GB, phi3:mini ~2.4 GB).
+# StorageClass gp3 was set as the EBS default in ebs-csi.tf.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp3
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: ai
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      # Must tolerate the taint applied to the GPU node group in gpu-node-group.tf.
+      # Without this, the pod is rejected by the GPU node and stays Pending.
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      # Pin to GPU nodes — ensures the pod lands where the NVIDIA device plugin
+      # has registered the nvidia.com/gpu resource.
+      nodeSelector:
+        workload: gpu
+      containers:
+        - name: ollama
+          # Check https://hub.docker.com/r/ollama/ollama/tags for the latest pinned tag.
+          # :latest is blocked by the disallow-latest-tag Kyverno policy.
+          image: ollama/ollama:0.5.4
+          ports:
+            - name: http
+              containerPort: 11434
+              protocol: TCP
+          env:
+            - name: OLLAMA_MODELS
+              value: /models
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "14Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: models
+              mountPath: /models
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: ollama-models
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: ai
+  labels:
+    app: ollama
+spec:
+  type: ClusterIP
+  selector:
+    app: ollama
+  ports:
+    - name: http
+      port: 11434
+      targetPort: 11434
+      protocol: TCP

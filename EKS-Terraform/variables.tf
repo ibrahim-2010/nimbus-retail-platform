@@ -97,3 +97,23 @@ variable "redis_node_type" {
   type        = string
   default     = "cache.t3.micro"
 }
+
+# ── GPU Node Group ────────────────────────────
+
+variable "gpu_node_instance_type" {
+  description = "EC2 instance type for GPU worker nodes"
+  type        = string
+  default     = "g4dn.xlarge"
+}
+
+variable "gpu_node_desired_size" {
+  description = "Desired GPU node count — set to 0 when not running LLM demos to avoid cost"
+  type        = number
+  default     = 1
+}
+
+variable "gpu_node_max_size" {
+  description = "Maximum number of GPU worker nodes"
+  type        = number
+  default     = 2
+}

@@ -1,0 +1,27 @@
+# ServiceMonitor — tells Prometheus to scrape Ollama's /metrics endpoint.
+# Ollama exposes Prometheus metrics on port 11434 at /metrics when
+# OLLAMA_HOST=0.0.0.0 is set (configured in ollama.yaml).
+#
+# The kube-prometheus-stack in helm-monitoring.tf is configured with:
+#   serviceMonitorNamespaceSelector: {}   <- watches ALL namespaces
+#   serviceMonitorSelector: {}            <- matches ALL ServiceMonitors
+# No label requirements — this will be picked up automatically.
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ollama
+  namespace: ai
+  labels:
+    app: ollama
+spec:
+  selector:
+    matchLabels:
+      app: ollama
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+  namespaceSelector:
+    matchNames:
+      - ai
