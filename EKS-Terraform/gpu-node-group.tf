@@ -23,7 +23,7 @@ resource "aws_eks_node_group" "gpu" {
   subnet_ids      = aws_subnet.private[*].id
 
   ami_type       = "AL2_x86_64_GPU"
-  capacity_type  = "ON_DEMAND"
+  capacity_type  = "SPOT"
   instance_types = [var.gpu_node_instance_type]
   disk_size      = 50
 
