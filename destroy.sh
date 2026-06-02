@@ -390,7 +390,7 @@ kubectl delete ingress -A --all 2>/dev/null || true
 echo "  Waiting 90s for ALB/NLB deregistration..."
 sleep 90
 
-for ns in nimbus nimbus-prod; do
+for ns in nimbus nimbus-prod operator-copilot ai; do
   kubectl delete all     --all -n "$ns" 2>/dev/null || true
   kubectl delete pvc     --all -n "$ns" 2>/dev/null || true
   kubectl delete secrets --all -n "$ns" 2>/dev/null || true
@@ -695,11 +695,15 @@ done
 # ──────────────────────────────────────────────
 echo -e "${YELLOW}[10/${TOTAL_PHASES}] Deleting ECR repositories...${NC}"
 
-for svc in auth-service catalog-service cart-service order-service notification-service; do
+for svc in auth-service audit-service catalog-service cart-service order-service notification-service; do
   aws ecr delete-repository --repository-name "nimbus/$svc" \
     --region "$REGION" --force 2>/dev/null \
     && echo "  Deleted: nimbus/$svc" || echo "  nimbus/$svc already gone"
 done
+
+aws ecr delete-repository --repository-name "operator-copilot" \
+  --region "$REGION" --force 2>/dev/null \
+  && echo "  Deleted: operator-copilot" || echo "  operator-copilot already gone"
 
 # ──────────────────────────────────────────────
 #  Phase 11: Jenkins Server + IAM + Secrets Manager
