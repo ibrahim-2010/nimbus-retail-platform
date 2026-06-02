@@ -24,7 +24,7 @@ pipeline {
     parameters {
         choice(
             name: 'SERVICE_NAME',
-            choices: ['auth-service', 'catalog-service', 'cart-service', 'order-service', 'notification-service'],
+            choices: ['auth-service', 'audit-service', 'catalog-service', 'cart-service', 'order-service', 'notification-service'],
             description: 'NimbusRetail service to build and deploy'
         )
     }
