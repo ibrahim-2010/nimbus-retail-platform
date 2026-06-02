@@ -5,6 +5,7 @@
 locals {
   nimbus_services = toset([
     "auth-service",
+    "audit-service",
     "catalog-service",
     "cart-service",
     "order-service",
