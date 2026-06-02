@@ -19,5 +19,5 @@ redis_engine_version = "7.1"
 redis_node_type      = "cache.t3.micro"
 
 gpu_node_instance_type = "g4dn.xlarge"
-gpu_node_desired_size  = 0
+gpu_node_desired_size  = 1
 gpu_node_max_size      = 2
