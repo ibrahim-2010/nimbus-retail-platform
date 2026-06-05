@@ -288,12 +288,17 @@ MANIFEST
 ║                                                               ║
 ║  ArgoCD is syncing apps — Kafka takes ~5 min.                 ║
 ║                                                               ║
-║  Next — trigger the 5 Nimbus service build jobs:              ║
+║  Next — trigger the 6 Nimbus service build jobs:              ║
 ║    nimbus-auth-service                                        ║
+║    nimbus-audit-service                                       ║
 ║    nimbus-catalog-service                                     ║
 ║    nimbus-cart-service                                        ║
 ║    nimbus-order-service                                       ║
 ║    nimbus-notification-service                                ║
+║                                                               ║
+║  Then build operator-copilot (manual — see deployment.yaml):  ║
+║    docker build / push to ECR + recreate operator-copilot-    ║
+║    secrets in operator-copilot namespace (ANTHROPIC_API_KEY)  ║
 ╚══════════════════════════════════════════════════════════════╝"
             '''
         }

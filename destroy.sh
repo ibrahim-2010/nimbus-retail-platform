@@ -470,10 +470,12 @@ fi
 
 if [ -n "$EKS_DIR" ]; then
   cd "$EKS_DIR"
-  terraform state rm kubernetes_namespace.monitoring 2>/dev/null || true
-  terraform state rm kubernetes_namespace.argocd     2>/dev/null || true
-  terraform state rm kubernetes_namespace.kafka      2>/dev/null || true
-  terraform state rm kubernetes_namespace.nimbus     2>/dev/null || true
+  terraform state rm kubernetes_namespace.monitoring        2>/dev/null || true
+  terraform state rm kubernetes_namespace.argocd            2>/dev/null || true
+  terraform state rm kubernetes_namespace.kafka             2>/dev/null || true
+  terraform state rm kubernetes_namespace.nimbus            2>/dev/null || true
+  terraform state rm kubernetes_namespace.ai                2>/dev/null || true
+  terraform state rm kubernetes_namespace.operator_copilot  2>/dev/null || true
   terraform state rm helm_release.monitoring         2>/dev/null || true
   terraform state rm helm_release.loki               2>/dev/null || true
   terraform state rm helm_release.tempo              2>/dev/null || true
