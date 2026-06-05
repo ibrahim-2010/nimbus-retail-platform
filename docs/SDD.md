@@ -4,13 +4,13 @@
 **Author:** Ibrahim Jinadu  
 **AWS Account:** 022374769206  
 **Region:** us-east-1  
-**Status:** Complete (Phases 1–7)  
+**Status:** Complete (All Phases — 1, 2, 3)  
 
 ---
 
 ## 1. Executive Summary
 
-NimbusRetail is a cloud-native e-commerce platform consisting of five microservices deployed on Amazon EKS. The platform team is responsible for taking developer-provided application code to production with the operational, observability, and security layers a real platform team would build around it.
+NimbusRetail is a cloud-native e-commerce platform consisting of six microservices deployed on Amazon EKS. The platform team is responsible for taking developer-provided application code to production with the operational, observability, and security layers a real platform team would build around it. Phase 3 extended the platform with an **AI operator copilot** — a self-hosted LLM agent (Anthropic Claude + Ollama on a dedicated NVIDIA T4 GPU node) that answers natural-language questions about platform health.
 
 The platform delivers:
 - **Zero-downtime deployments** via ArgoCD GitOps with Helm rolling updates
@@ -19,6 +19,7 @@ The platform delivers:
 - **Zero-trust networking** – Kubernetes NetworkPolicies with default-deny in the application namespace
 - **Secret management** – External Secrets Operator pulling from AWS Secrets Manager via IRSA
 - **Admission control** – Kyverno blocking privileged containers and enforcing resource limits
+- **AI agent layer** – GPU-accelerated Ollama + operator-copilot with Anthropic Claude integration
 
 ---
 
@@ -33,6 +34,9 @@ The platform delivers:
 | cart-service | Node.js / Express | 3003 | User cart management |
 | order-service | Node.js / Express | 3004 | Order creation, Kafka producer |
 | notification-service | Node.js | 3005 | Kafka consumer, mock email dispatch |
+| audit-service | Node.js / Express | 3006 | Audit log ingestion, health + metrics endpoints |
+| **operator-copilot** | Node.js | 3000 | AI agent — natural-language platform health queries via Anthropic Claude + Ollama |
+| **Ollama** | Go | 11434 | Local LLM inference server on GPU node (NVIDIA T4) |
 
 ### 2.2 Communication Patterns
 
@@ -49,6 +53,13 @@ order-service → cart-service  (fetch cart at checkout)
 ```
 auth-service  → users.registered  → notification-service
 order-service → orders.created    → notification-service
+```
+
+**AI Agent (Phase 3):**
+```
+operator-copilot → Anthropic Claude API (external)
+operator-copilot → Ollama (cluster-internal, port 11434, GPU node)
+Ollama           → NVIDIA T4 GPU (nvidia.com/gpu resource, kube-system device plugin)
 ```
 
 ---
@@ -68,7 +79,8 @@ order-service → orders.created    → notification-service
 | RDS PostgreSQL | 16.3, db.t3.micro | Persistent storage (all services) |
 | ElastiCache Redis | 7.1, cache.t3.micro | Caching (catalog), sessions (cart) |
 | Strimzi Kafka | 3-broker KRaft, 20 Gi/broker | Async event streaming |
-| ECR | 5 repos, image scanning | Container registry |
+| ECR | 6 repos, image scanning | Container registry |
+| GPU node group | g4dn.xlarge, NVIDIA T4, ON_DEMAND | Ollama + operator-copilot inference |
 | ALB | Internet-facing | HTTP ingress |
 | Jenkins EC2 | t3.xlarge, 30 Gi EBS | CI/CD runtime |
 | Secrets Manager | `nimbus-cluster/*` | Secret storage |
@@ -88,7 +100,9 @@ EKS Nodes (private subnets: 10.0.3.0/24, 10.0.4.0/24)
     ├── kafka namespace (Strimzi brokers)
     ├── monitoring namespace (Prometheus, Grafana, Loki, Tempo)
     ├── argocd namespace
-    └── kyverno namespace
+    ├── kyverno namespace
+    ├── ai namespace (Ollama — GPU node)
+    └── operator-copilot namespace (AI agent)
     │
     ├── RDS PostgreSQL (private subnet, port 5432)
     └── ElastiCache Redis (private subnet, port 6379)
@@ -256,12 +270,12 @@ Consumed by: notification-service → sends order confirmation.
 
 | Repo | Contents | Audience |
 |---|---|---|
-| `nimbus-retail-starter` | 5 service source trees, docker-compose | Developers |
-| `nimbus-retail-platform` | Terraform, Helm chart, ArgoCD apps, pipelines | Platform team |
+| `nimbus-retail-starter` | 6 service source trees, operator-copilot source, docker-compose | Developers |
+| `nimbus-retail-platform` | Terraform, Helm charts, ArgoCD apps, pipelines | Platform team |
 
 ### 7.2 CI Pipeline (Jenkins)
 
-One parameterised `Jenkinsfile-Nimbus` handles all five services:
+One parameterised `Jenkinsfile-Nimbus` handles all six nimbus services:
 
 ```
 Cleanup → Checkout app repo → SonarQube analysis → Quality Gate
@@ -278,20 +292,25 @@ argocd/app-of-apps.yaml          (applied once manually)
   └── argocd/apps/
         ├── nimbus-namespace.yaml
         ├── nimbus-kafka.yaml
-        ├── nimbus-auth.yaml      ← helm/nimbus-service + values-auth.yaml
+        ├── nimbus-auth.yaml           ← helm/nimbus-service + values-auth.yaml
         ├── nimbus-catalog.yaml
         ├── nimbus-cart.yaml
         ├── nimbus-order.yaml
         ├── nimbus-notification.yaml
+        ├── nimbus-audit.yaml          ← helm/nimbus-service + values-audit.yaml
         ├── nimbus-monitoring.yaml
-        └── nimbus-security.yaml
+        ├── nimbus-security.yaml
+        ├── nimbus-ollama.yaml         ← helm/nimbus-ollama (GPU node, NVIDIA T4)
+        ├── nimbus-operator-copilot.yaml ← helm/nimbus-operator-copilot
+        ├── nimbus-frontend.yaml
+        └── nimbus-ingress.yaml
 ```
 
 ---
 
 ## 8. Helm Chart Design
 
-A single chart (`helm/nimbus-service/`) serves all five services. Per-service `values-<name>.yaml` files override ports, image repositories, environment variables, and secret references. This avoids chart duplication while keeping each service independently configurable.
+A single chart (`helm/nimbus-service/`) serves all six nimbus services. Per-service `values-<name>.yaml` files override ports, image repositories, environment variables, and secret references. This avoids chart duplication while keeping each service independently configurable.
 
 Key templates:
 - `deployment.yaml` – supports `env` (plain) and `envFromSecrets` (secret refs)
@@ -338,9 +357,18 @@ Seven `PrometheusRule` alerts defined (`Kubernetes-Manifests-file/Monitoring/nim
 
 | Attribute | Value | Rationale |
 |---|---|---|
-| Instance type | t3.xlarge | 4 vCPU, 16 GiB RAM per node. Sufficient for 5 app services + 3 Kafka brokers + monitoring stack concurrently. t3.medium (4 GiB) was ruled out – Kafka brokers alone require ~512 MiB each. |
+| Instance type | t3.xlarge | 4 vCPU, 16 GiB RAM per node. Sufficient for 6 app services + 3 Kafka brokers + monitoring stack concurrently. t3.medium (4 GiB) was ruled out – Kafka brokers alone require ~512 MiB each. |
 | Node count | 2 | Minimum for HA. A single node failure keeps all 2-replica services running on the surviving node. |
-| Max pods per node | ~58 (AWS CNI default for t3.xlarge) | At peak: 10 app pods + 3 Kafka + ~15 monitoring + ~5 system = ~33 pods across 2 nodes. Well within limit. |
+| Max pods per node | ~58 (AWS CNI default for t3.xlarge) | At peak: 12 app pods + 3 Kafka + ~15 monitoring + ~5 system = ~35 pods across 2 nodes. Well within limit. |
+
+**GPU node group (Phase 3):**
+
+| Attribute | Value | Rationale |
+|---|---|---|
+| Instance type | g4dn.xlarge | 4 vCPU, 16 GiB RAM, 1× NVIDIA T4 (16 GiB VRAM). Minimum GPU instance with sufficient VRAM for small LLMs. |
+| Capacity type | ON_DEMAND | Spot interruption would evict Ollama mid-inference; ON_DEMAND preferred for demo stability. |
+| Taint | `nvidia.com/gpu=true:NoSchedule` | Prevents CPU workloads from landing on the expensive GPU node. |
+| Scale-to-zero | `desiredSize=0` between demos | ~$0.526/hr — scale up only for active demo sessions. |
 
 ### 10.2 RDS PostgreSQL
 
@@ -431,6 +459,9 @@ Seven `PrometheusRule` alerts defined (`Kubernetes-Manifests-file/Monitoring/nim
 | Secret management | ESO + Secrets Manager | Manual kubectl secrets | Automated rotation, no plaintext in Git, IRSA for auditability |
 | Admission control | Kyverno | OPA/Gatekeeper | Kubernetes-native CRDs, simpler policy authoring |
 | Log aggregation | Loki + Promtail | AWS CloudWatch | Cost: Loki is free; CloudWatch charges per GB ingested and stored |
+| LLM inference | Ollama (self-hosted) | OpenAI API only | Self-hosted Ollama enables offline inference; avoids per-token cost at demo scale; T4 sufficient for small models |
+| GPU instance type | g4dn.xlarge (T4) | p3.2xlarge (V100) | T4 ~$0.53/hr vs V100 ~$3.06/hr; T4 adequate for inference workloads at this scale |
+| AI agent framework | operator-copilot (custom Node.js) | LangChain / LlamaIndex | Minimal dependency footprint; direct Claude API calls keep the agent logic transparent |
 
 Full rationale for each decision: see `docs/ADRs/`.
 
@@ -448,3 +479,5 @@ Full rationale for each decision: see `docs/ADRs/`.
 | Alertmanager routing | Alerts fire to Alertmanager but no receiver (Slack/PagerDuty) is configured |
 | Jenkins SSH exposure | SSH currently defaults to `0.0.0.0/0` unless `ssh_allowed_cidr` is set in `terraform.tfvars` before provisioning |
 | No PR-gated deployments | Jenkins triggers on any push to main; a PR review gate before merging would add a human approval step |
+| audit-service source stub | `services/audit-service/` is a minimal Express stub — not yet in nimbus-retail-starter; Jenkins pipeline skips SonarQube until full implementation added |
+| operator-copilot manual build | No Jenkins job for operator-copilot; image must be built and pushed manually from the Jenkins server on each deployment |

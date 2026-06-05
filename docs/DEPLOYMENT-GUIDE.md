@@ -13,9 +13,10 @@
 | 2 – Bootstrap | One-time | Local (Git Bash) | S3, DynamoDB, key pair, Route 53 zone |
 | 3 – Update registrar nameservers | One-time (after Step 2) | Domain registrar | Point domain to Route 53 – never repeat |
 | 4 – Deploy Jenkins server | Every deployment | Local (Git Bash) | Provision Jenkins EC2 with SSH IP lock |
-| 5 – Configure Jenkins | Every deployment | SSH into Jenkins EC2 | Inject credentials, verify 6 jobs |
+| 5 – Configure Jenkins | Every deployment | SSH into Jenkins EC2 | Inject credentials, verify 7 jobs |
 | 6 – Infrastructure pipeline | Every deployment | Jenkins UI | EKS, RDS, Redis, ArgoCD, all k8s apps |
-| 7 – Service builds | Every deployment | Jenkins UI | Build + push 5 images, ArgoCD deploys |
+| 7 – Service builds | Every deployment | Jenkins UI | Build + push 6 images, ArgoCD deploys |
+| 7b – Operator-copilot build | Every deployment | SSH: Jenkins EC2 | Build image, push to ECR, create Anthropic secret |
 | 8 – Verify | Every deployment | Local | Check pods, URLs, smoke test |
 
 **Steps 1–3** are done once when you first set up the project.  
@@ -202,7 +203,7 @@ Enter when prompted:
 
 **Success check:** The script output ends with:
 ```
-6 jobs created
+✅ 7 pipeline jobs (nimbus-infrastructure, 6x nimbus-*-service)
 Jenkins is live at http://<JENKINS_IP>:8080
 ```
 
@@ -211,12 +212,13 @@ Jenkins is live at http://<JENKINS_IP>:8080
 exit
 ```
 
-Open Jenkins in a browser to verify 6 jobs are listed:
+Open Jenkins in a browser to verify 7 jobs are listed:
 - `http://<JENKINS_IP>:8080` – login: `admin` / your chosen password
 
-Verify all 6 jobs exist:
+Verify all 7 jobs exist:
 - `nimbus-infrastructure`
 - `nimbus-auth-service`
+- `nimbus-audit-service`
 - `nimbus-catalog-service`
 - `nimbus-cart-service`
 - `nimbus-order-service`
@@ -224,7 +226,7 @@ Verify all 6 jobs exist:
 
 SonarQube is also available: `http://<JENKINS_IP>:9000` – login: `admin` / `SonarAdmin2026!`
 
-> **Only 2 jobs instead of 6?** This means `tools-install.sh` ran with a stale cached image
+> **Only 2 jobs instead of 7?** This means `tools-install.sh` ran with a stale cached image
 > before the fix was applied. Re-run `setup-jcasc.sh` to reload JCasC from GitHub:
 > `ssh -i ../test.pem jenkins@<JENKINS_IP>` → `sudo bash /opt/setup-jcasc.sh`
 
@@ -265,20 +267,36 @@ Pipeline complete.
 # Configure kubectl locally
 aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
 
-# Check all 12 ArgoCD apps
+# Check all 15 ArgoCD apps
 kubectl get applications -n argocd
 ```
 
 Expected output – all apps `Synced` + `Healthy`:
 ```
-NAME                    SYNC STATUS   HEALTH STATUS
-nimbus-app-of-apps      Synced        Healthy
-nimbus-frontend         Synced        Healthy
-nimbus-security         Synced        Healthy
-nimbus-kafka            Synced        Healthy
-nimbus-monitoring       Synced        Healthy
+NAME                         SYNC STATUS   HEALTH STATUS
+nimbus-app-of-apps           Synced        Healthy
+nimbus-frontend              Synced        Healthy
+nimbus-security              Synced        Healthy
+nimbus-kafka                 Synced        Healthy
+nimbus-monitoring            Synced        Healthy
+nimbus-auth                  Synced        Healthy
+nimbus-catalog               Synced        Healthy
+nimbus-cart                  Synced        Healthy
+nimbus-order                 Synced        Healthy
+nimbus-notification          Synced        Healthy
+nimbus-audit                 Synced        Healthy
+nimbus-ollama                Synced        Healthy
+nimbus-operator-copilot      Synced        Healthy
 ...
 ```
+
+> **GPU apps (Ollama, operator-copilot):** Require the GPU node group to have `desiredSize >= 1`.
+> If GPU nodes are scaled to 0, these apps will show `Degraded` — that is expected. Scale up before demos:
+> ```bash
+> aws eks update-nodegroup-config \
+>   --cluster-name nimbus-cluster --nodegroup-name gpu-nodes \
+>   --scaling-config minSize=0,maxSize=2,desiredSize=1 --region us-east-1
+> ```
 
 > **Kafka takes ~5 min** to elect a KRaft leader – it will show `Progressing` briefly,
 > then become `Healthy`. All other apps sync in 2–3 min.
@@ -298,18 +316,95 @@ Still in Jenkins – run each job once (**Build with Parameters → Build**):
 | Job | Service built |
 |---|---|
 | `nimbus-auth-service` | auth-service |
+| `nimbus-audit-service` | audit-service (minimal stub — see note below) |
 | `nimbus-catalog-service` | catalog-service |
 | `nimbus-cart-service` | cart-service |
 | `nimbus-order-service` | order-service |
 | `nimbus-notification-service` | notification-service |
 
-All 5 can be triggered at the same time – they are independent.
+All 6 can be triggered at the same time – they are independent.
 
 Each build runs: SonarQube scan → Trivy image scan → Docker build → ECR push → Helm values update → ArgoCD rollout.
 
-**Success:** All 5 jobs show blue (passing) in Jenkins.
+**Success:** All 6 jobs show blue (passing) in Jenkins.
 
 In ArgoCD, all service apps show `Running 1/1` after the rollout completes.
+
+> **audit-service note:** The image tagged `:1` was manually built and pushed directly to ECR
+> (the `services/audit-service/` source is not yet in the app repo). The `nimbus-audit-service`
+> Jenkins pipeline will fail at the SonarQube stage until real source code is added to
+> `nimbus-retail-starter/services/audit-service/`. For demos, nimbus-audit is already Healthy
+> because image `:1` is already in ECR — skip this job for now.
+
+---
+
+### Step 7b – Build Operator-Copilot (Manual)
+
+operator-copilot is not in the Jenkins JCasC jobs — it requires a manual build because it needs your `ANTHROPIC_API_KEY` secret. Run these commands **on the Jenkins server** (SSH in as `jenkins` user first):
+
+```bash
+ssh -i ../test.pem jenkins@<JENKINS_IP>
+```
+
+**Set variables:**
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=us-east-1
+```
+
+**Clone the app repo and build the image:**
+```bash
+cd ~
+git clone https://github.com/ibrahim-2010/nimbus-retail-starter.git
+cd nimbus-retail-starter/services/operator-copilot
+
+# Login to ECR
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin \
+    $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+# Build and push
+docker build -t operator-copilot:latest .
+docker tag operator-copilot:latest \
+  $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/operator-copilot:latest
+docker push \
+  $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/operator-copilot:latest
+```
+
+**Create the Kubernetes secret** (ArgoCD will deploy operator-copilot once this exists):
+```bash
+# Ensure namespace exists
+kubectl get namespace operator-copilot 2>/dev/null \
+  || kubectl create namespace operator-copilot
+
+# Create secret — paste your actual Anthropic API key
+kubectl create secret generic operator-copilot-secrets \
+  --namespace operator-copilot \
+  --from-literal=ANTHROPIC_API_KEY=<your-anthropic-api-key>
+```
+
+**Verify Ollama is ready before testing the agent** (Ollama must finish loading the model first):
+```bash
+kubectl logs -n ai deploy/ollama --tail=20
+# Wait for: "Listening on [::]:11434"
+```
+
+**Test operator-copilot:**
+```bash
+kubectl get pods -n operator-copilot
+# Expected: operator-copilot pod Running 1/1
+
+kubectl logs -n operator-copilot deploy/operator-copilot --tail=20
+# Expected: server started / listening on port 3000
+```
+
+> **Secret already exists?** If you're redeploying, delete and recreate:
+> ```bash
+> kubectl delete secret operator-copilot-secrets -n operator-copilot
+> kubectl create secret generic operator-copilot-secrets \
+>   --namespace operator-copilot \
+>   --from-literal=ANTHROPIC_API_KEY=<your-key>
+> ```
 
 ---
 
@@ -324,7 +419,7 @@ kubectl get nodes
 
 ```bash
 kubectl get pods -n nimbus
-# Expected: 5 services + frontend, STATUS: Running, READY: 1/1
+# Expected: 6 services + frontend, STATUS: Running, READY: 1/1
 ```
 
 ```bash
@@ -457,7 +552,7 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 | `nimbus-infrastructure` fails at Terraform Init | Provider download timeout | Re-run the job – transient network issue |
 | `nimbus-infrastructure` fails at Terraform Apply – EKS Cluster | IAM permissions or network issue | Check Jenkins EC2 instance role has all 8 policies; check route tables in VPC |
 | `nimbus-infrastructure` fails at Terraform Apply – Full Stack | IAM permission issue | Check Jenkins EC2 instance role; re-run job |
-| Only 2 jobs in Jenkins instead of 6 | JCasC loaded from stale cached image | Re-run `sudo bash /opt/setup-jcasc.sh` on the Jenkins EC2 |
+| Only 2 jobs in Jenkins instead of 7 | JCasC loaded from stale cached image | Re-run `sudo bash /opt/setup-jcasc.sh` on the Jenkins EC2 |
 | `data.aws_route53_zone.main` not found | Route 53 zone doesn't exist | Run `bash bootstrap.sh` – it creates the zone idempotently |
 | ArgoCD app stuck `OutOfSync` | Kyverno blocking | `kubectl get policyreport -n nimbus` |
 | ESO `SecretSyncedError` | Secrets not yet in Secrets Manager | Check pipeline Populate Secrets Manager stage output; re-run pipeline if needed |
@@ -487,7 +582,7 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 | Prometheus | `http://prometheus.platinum-consults.com` |
 | ArgoCD | `https://$(kubectl get svc argocd-server -n argocd -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')` |
 | Infrastructure pipeline | `nimbus-infrastructure` job in Jenkins |
-| Service pipelines | `nimbus-auth/catalog/cart/order/notification-service` |
+| Service pipelines | `nimbus-auth/audit/catalog/cart/order/notification-service` |
 | Platform repo | `https://github.com/ibrahim-2010/nimbus-retail-platform` |
 | App repo | `https://github.com/ibrahim-2010/nimbus-retail-starter` |
 | Runbook | `nimbus-retail-platform/docs/RUNBOOK.md` |

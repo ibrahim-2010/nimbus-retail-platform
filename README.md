@@ -19,11 +19,11 @@
 
 ## Overview
 
-NimbusRetail is a **fully automated, production-grade cloud-native e-commerce platform** deployed on AWS EKS. Five microservices (Node.js + Python) communicate synchronously over HTTP and asynchronously through Apache Kafka, backed by managed RDS PostgreSQL and ElastiCache Redis.
+NimbusRetail is a **fully automated, production-grade cloud-native e-commerce platform** deployed on AWS EKS. Six microservices (Node.js + Python) communicate synchronously over HTTP and asynchronously through Apache Kafka, backed by managed RDS PostgreSQL and ElastiCache Redis. The platform includes a **Phase 3 AI operator copilot** — a self-hosted LLM agent (Anthropic Claude + Ollama/Tesla T4) that answers questions about platform health in natural language.
 
 The project was built to reflect how a real platform engineering team operates: **every component is automated, every credential is generated and stored securely, every architectural decision is documented, and every production issue encountered is fully resolved and written up.**
 
-The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Grafana, Loki, Tempo, Kyverno, ESO – deploys from a single Jenkins pipeline with zero manual Kubernetes or AWS steps after initial setup.
+The entire stack – VPC, EKS cluster, RDS, Redis, Kafka, ArgoCD, Prometheus, Grafana, Loki, Tempo, Kyverno, ESO, GPU node group, Ollama, operator-copilot – deploys from a single Jenkins pipeline with zero manual Kubernetes or AWS steps after initial setup.
 
 > **19 real production issues** encountered and resolved across deployment cycles. Every root cause and fix is documented in [`docs/ISSUES-REPORT.md`](docs/ISSUES-REPORT.md) – not a tutorial, not a happy path.
 
@@ -48,13 +48,13 @@ This project was built to reflect production platform engineering practices – 
 - `nimbus.tfvars` committed via explicit `.gitignore` exception – no state drift between runs
 
 ### GitOps – ArgoCD App-of-Apps
-- Single `kubectl apply -f argocd/app-of-apps.yaml` bootstraps **11 child applications**
+- Single `kubectl apply -f argocd/app-of-apps.yaml` bootstraps **14 child applications**
 - ArgoCD watches `argocd/apps/` – adding a new app is a single YAML file, no manual steps
 - Every service, security policy, and monitoring rule is declared in Git and auto-synced
 
 ### CI/CD – Fully Automated DevSecOps Pipeline
 - **Jenkins configured entirely via JCasC** (Configuration as Code) – zero manual UI setup
-- `setup-jcasc.sh` provisions credentials, SonarQube, webhooks, and 6 pipeline jobs in one command
+- `setup-jcasc.sh` provisions credentials, SonarQube, webhooks, and 7 pipeline jobs in one command
 - Every service build: SonarQube analysis → Quality Gate → Trivy FS scan → Docker build → Trivy image scan → ECR push → Helm values update → ArgoCD rollout
 - No human touches the cluster after Step 3 of the initial bootstrap
 
@@ -76,8 +76,14 @@ This project was built to reflect production platform engineering practices – 
 - **Loki** over AWS CloudWatch – CloudWatch charges per GB ingested and stored; Loki runs in-cluster at no additional cost
 - Total platform cost: **~$0.51/hr** while running – well within a reasonable demo budget
 
+### AI / ML Ops – Phase 3 Operator Copilot
+- **GPU node group** – EKS managed node group (g4dn.xlarge, NVIDIA T4) with `nvidia.com/gpu:NoSchedule` taint and `workload=gpu` label; NVIDIA device plugin DaemonSet registers `nvidia.com/gpu` as a schedulable Kubernetes resource
+- **Self-hosted LLM** – Ollama deployed on the GPU node; Tesla T4 detected at boot, model served over HTTP on port 11434
+- **AI agent** – operator-copilot queries both Claude (Anthropic API) and the local Ollama model to answer natural-language questions about cluster health, pod status, and recent alerts
+- **Cost control** – GPU node scales to 0 between demos; `desiredSize=1` activates it for a session
+
 ### Observability – Four Pillars
-- **Metrics**: Prometheus with `kube-prometheus-stack`, ServiceMonitor CRs scraping all 5 services
+- **Metrics**: Prometheus with `kube-prometheus-stack`, ServiceMonitor CRs scraping all 6 services
 - **Dashboards**: Grafana with Prometheus, Loki, and Tempo datasources
 - **Logs**: Loki + Promtail DaemonSet – no SDK changes needed in application code
 - **Traces**: Tempo deployed and ready for OTLP instrumentation
@@ -99,10 +105,11 @@ This project was built to reflect production platform engineering practices – 
 | **Cloud** | AWS us-east-1 | EKS 1.31, RDS PostgreSQL 16, ElastiCache Redis 7, ECR, ALB, Route 53, Secrets Manager |
 | **Orchestration** | Kubernetes (EKS) | 2 × t3.xlarge nodes, OIDC provider, IRSA per service account |
 | **IaC** | Terraform | 40+ resources – VPC, EKS, RDS, Redis, Helm releases, IAM, namespaces |
-| **GitOps** | ArgoCD | App-of-Apps pattern – 11 child apps, one `kubectl apply` bootstraps everything |
-| **CI/CD** | Jenkins + JCasC | 6 pipelines, zero-click setup, fully declarative configuration |
+| **GitOps** | ArgoCD | App-of-Apps pattern – 14 child apps, one `kubectl apply` bootstraps everything |
+| **CI/CD** | Jenkins + JCasC | 7 pipelines, zero-click setup, fully declarative configuration |
 | **Messaging** | Strimzi Kafka | KRaft mode (no ZooKeeper), 3 brokers, gp3 EBS PVCs, in-cluster |
-| **Services** | Node.js + Python | auth/cart/order/notification (Express), catalog (FastAPI) |
+| **Services** | Node.js + Python | auth/cart/order/notification/audit (Express), catalog (FastAPI) |
+| **AI Agent** | Ollama + Claude | operator-copilot on GPU node (g4dn.xlarge, NVIDIA T4); Ollama for local LLM |
 | **Frontend** | nginx | Static HTML/JS, ALB Ingress, custom `/healthz` endpoint |
 | **Secrets** | ESO + Secrets Manager | Runtime injection – zero plaintext in Git or manifests |
 | **Policy** | Kyverno | 2 enforce + 2 audit policies – resource limits, image tags, labels |
@@ -126,7 +133,10 @@ This project was built to reflect production platform engineering practices – 
 | **cart-service** | Node.js / Express | 3003 | Shopping cart (JSONB in PostgreSQL), Redis caching |
 | **order-service** | Node.js / Express | 3004 | Order creation, Kafka producer (`orders.created`) |
 | **notification-service** | Node.js | 3005 | Kafka consumer – processes `users.registered` + `orders.created` |
+| **audit-service** | Node.js / Express | 3006 | Audit log ingestion – `/healthz`, `/readyz`, `/metrics` |
 | **frontend** | nginx | 80 | Static UI – register, browse, add to cart, place order |
+| **operator-copilot** | Node.js | 3000 | AI agent – natural-language platform health queries via Claude + Ollama |
+| **Ollama** | Go | 11434 | Local LLM server on GPU node (NVIDIA T4) – model inference backend |
 
 All backend services expose `/healthz`, `/readyz`, and `/metrics` (Prometheus format).
 
@@ -191,7 +201,7 @@ Bootstrap → Terraform EKS cluster → Terraform full stack → Configure kubec
 | **Logs** | Loki + Promtail DaemonSet | Grafana → Explore → Loki datasource |
 | **Traces** | Tempo (OTLP-ready) | Grafana → Explore → Tempo datasource |
 | **Alerts** | PrometheusRule CRs | PodDown · HighCPUUsage · PodCrashLooping · HighErrorRate · KafkaConsumerLag |
-| **ServiceMonitors** | ServiceMonitor CRs | Scrapes `/metrics` from all 5 nimbus services every 30s |
+| **ServiceMonitors** | ServiceMonitor CRs | Scrapes `/metrics` from all 6 nimbus services every 30s |
 
 ---
 
@@ -271,8 +281,9 @@ nimbus-retail-platform/
 │   ├── helm-external-dns.tf        # ExternalDNS + Route 53 integration
 │   ├── external-dns-iam.tf         # ExternalDNS IAM role
 │   ├── irsa-nimbus.tf              # IRSA role for ESO (scoped to nimbus-cluster/*)
-│   ├── ecr.tf                      # 5 ECR repositories (nimbus/*)
-│   ├── namespaces.tf               # Kubernetes namespaces (nimbus, monitoring, kafka, argocd)
+│   ├── ecr.tf                      # 6 ECR repositories (nimbus/* + operator-copilot)
+│   ├── gpu-node-group.tf           # g4dn.xlarge GPU node group + NVIDIA device plugin
+│   ├── namespaces.tf               # Kubernetes namespaces (nimbus, monitoring, kafka, argocd, ai, operator-copilot)
 │   └── nimbus.tfvars               # Cluster config (committed via .gitignore exception)
 │
 ├── Jenkins-Server-TF/              # Jenkins EC2 – IaC
@@ -282,7 +293,7 @@ nimbus-retail-platform/
 │   ├── backend.tf                  # Remote state – S3 + DynamoDB
 │   ├── tools-install.sh            # Jenkins, Docker, Terraform, kubectl, Trivy, SonarQube
 │   └── jcasc/
-│       ├── jenkins.yaml            # JCasC – credentials, SonarQube, 6 pipeline jobs
+│       ├── jenkins.yaml            # JCasC – credentials, SonarQube, 7 pipeline jobs
 │       ├── setup-jcasc.sh          # One-command secret injection + SSH configuration
 │       └── plugins.txt             # Jenkins plugin list
 │
@@ -290,11 +301,14 @@ nimbus-retail-platform/
 │   ├── Jenkinsfile-Infrastructure  # 9-stage pipeline: full EKS platform deployment
 │   └── Jenkinsfile-Nimbus          # 9-stage DevSecOps: SonarQube → Trivy → ECR → ArgoCD
 │
-├── helm/nimbus-service/            # Shared Helm chart – all 5 services
+├── helm/nimbus-service/            # Shared Helm chart – all 6 nimbus services
 │   ├── Chart.yaml
 │   ├── templates/                  # Deployment, Service, HPA templates
 │   ├── values.yaml                 # Base defaults
-│   └── values-{auth,catalog,cart,order,notification}.yaml
+│   └── values-{auth,catalog,cart,order,notification,audit}.yaml
+│
+├── helm/nimbus-ollama/             # Ollama Helm chart – GPU node, NVIDIA resource request
+├── helm/nimbus-operator-copilot/   # operator-copilot Helm chart – AI agent deployment
 │
 ├── Kubernetes-Manifests-file/
 │   ├── Kafka/kafka-cluster.yaml    # Strimzi KafkaCluster CR (KRaft, 3 brokers, gp3)
@@ -307,12 +321,13 @@ nimbus-retail-platform/
 │
 ├── argocd/
 │   ├── app-of-apps.yaml            # Root ArgoCD app – auto-discovers argocd/apps/
-│   └── apps/                       # 11 child app manifests
+│   └── apps/                       # 14 child app manifests
 │
 ├── docs/
 │   ├── SDD.md                      # System Design Document + AWS architecture diagram
 │   ├── DEPLOYMENT-GUIDE.md         # Full deployment walkthrough + secret management + rotation
 │   ├── ISSUES-REPORT.md            # 19 production issues – root cause + fix + lesson
+│   ├── PHASE3-DEPLOYMENT-REPORT.md # Phase 3 deployment issues + root causes (GPU, ECR, NFD)
 │   ├── RUNBOOK.md                  # Day-2 operations – rollback, scale, rotate, investigate
 │   └── ADRs/                       # 5 Architecture Decision Records
 │
@@ -349,7 +364,7 @@ terraform output jenkins_public_ip
 ```bash
 ssh -i ../test.pem ubuntu@<JENKINS_IP>
 sudo tail -f /var/log/tools-install.log  # wait for: Installation Complete
-sudo bash /opt/setup-jcasc.sh            # injects secrets, creates 6 jobs
+sudo bash /opt/setup-jcasc.sh            # injects secrets, creates 7 jobs
 ```
 
 ### Step 4 – Run Infrastructure Pipeline (~30 min)
@@ -358,9 +373,12 @@ sudo bash /opt/setup-jcasc.sh            # injects secrets, creates 6 jobs
 The pipeline deploys the full stack and prints all access URLs on completion.
 
 ### Step 5 – Trigger Service Builds
-Run all 5 in parallel – `nimbus-auth/catalog/cart/order/notification-service`.
+Run all 6 in parallel – `nimbus-auth/audit/catalog/cart/order/notification-service`.
 
 Each build: SonarQube → Quality Gate → Trivy → Docker → ECR → Helm values → ArgoCD rollout.
+
+### Step 5b – Build Operator-Copilot (Manual)
+SSH into Jenkins as `jenkins` user, clone `nimbus-retail-starter`, build + push the `operator-copilot` image to ECR, then create the `operator-copilot-secrets` Kubernetes secret with your `ANTHROPIC_API_KEY`. Full commands in [DEPLOYMENT-GUIDE.md](docs/DEPLOYMENT-GUIDE.md) Step 7b.
 
 ---
 
@@ -390,7 +408,7 @@ aws secretsmanager get-secret-value \
 aws eks update-kubeconfig --name nimbus-cluster --region us-east-1
 
 kubectl get nodes                            # 2 nodes Ready
-kubectl get pods -n nimbus                   # 6 Running (5 services + frontend)
+kubectl get pods -n nimbus                   # 7 Running (6 services + frontend)
 kubectl get pods -n kafka                    # 3 nimbus-kafka-dual-role-* Running
 kubectl get pods -n monitoring               # prometheus, grafana, loki, tempo Running
 kubectl get applications -n argocd           # all Synced + Healthy

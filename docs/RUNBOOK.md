@@ -1,7 +1,7 @@
 # NimbusRetail – Operational Runbook
 
 **Cluster:** nimbus-cluster (us-east-1)
-**Namespace:** nimbus (application), kafka, monitoring, argocd, kyverno
+**Namespace:** nimbus (application), kafka, monitoring, argocd, kyverno, ai (Ollama), operator-copilot
 
 Before running any kubectl command, configure access:
 ```bash
@@ -237,14 +237,52 @@ sudo bash /opt/setup-jcasc.sh
 #   Terraform Apply Full Stack → Configure kubectl → Populate Secrets Manager →
 #   Install ArgoCD → Deploy App-of-Apps → Initialize Database
 
-# 9. Trigger first Jenkins builds for all 5 services (can run in parallel)
+# 9. Trigger first Jenkins builds for all 6 services (can run in parallel)
 #   → Jenkins UI: run each nimbus-*-service job once to push initial images to ECR
-#   → ArgoCD picks up the tag changes and deploys all 5 services
+#   → ArgoCD picks up the tag changes and deploys all 6 services
+# 10. Build operator-copilot manually (SSH into Jenkins as jenkins user):
+#   → git clone nimbus-retail-starter → build + push operator-copilot to ECR
+#   → kubectl create secret generic operator-copilot-secrets -n operator-copilot \
+#       --from-literal=ANTHROPIC_API_KEY=<key>
 ```
 
 ---
 
-## 10. Tear Down the Stack
+## 10. Scale GPU Node (Demo Prep / Cost Control)
+
+The GPU node group (`g4dn.xlarge`, ~$0.526/hr) scales to 0 between demos. Scale it up before running an operator-copilot demo, and back to 0 afterward.
+
+**Scale up (before demo):**
+```bash
+aws eks update-nodegroup-config \
+  --cluster-name nimbus-cluster \
+  --nodegroup-name gpu-nodes \
+  --scaling-config minSize=0,maxSize=2,desiredSize=1 \
+  --region us-east-1
+```
+
+Wait ~3 min for the node to join, then verify Ollama is ready:
+```bash
+kubectl get nodes -l workload=gpu
+kubectl get pods -n ai
+kubectl logs -n ai deploy/ollama --tail=10
+# Wait for: "Listening on [::]:11434"
+```
+
+**Scale down (after demo):**
+```bash
+aws eks update-nodegroup-config \
+  --cluster-name nimbus-cluster \
+  --nodegroup-name gpu-nodes \
+  --scaling-config minSize=0,maxSize=2,desiredSize=0 \
+  --region us-east-1
+```
+
+> **operator-copilot** will show `Degraded` in ArgoCD when the GPU node is at 0 — that is expected. The app deployment stays in place; the pod is simply unschedulable until the node comes back.
+
+---
+
+## 11. Tear Down the Stack
 
 ```bash
 cd nimbus-retail-platform
@@ -270,7 +308,7 @@ aws dynamodb delete-table --table-name ibrahim-cloud-native-tf-lock --region us-
 
 ---
 
-## 11. Common Error Reference
+## 12. Common Error Reference
 
 | Error | Where seen | Fix |
 |---|---|---|

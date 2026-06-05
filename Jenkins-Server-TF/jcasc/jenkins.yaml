@@ -205,6 +205,30 @@ jobs:
         }
       }
 
+  - script: >
+      pipelineJob('nimbus-audit-service') {
+        description('audit-service — SonarQube + Trivy + ECR + Helm values update')
+        parameters {
+          choiceParam('SERVICE_NAME',
+            ['audit-service', 'auth-service', 'catalog-service', 'cart-service', 'order-service', 'notification-service'],
+            'NimbusRetail service to build and deploy')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/ibrahim-2010/nimbus-retail-platform.git')
+                  credentials('github-creds')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkins-Pipeline-Code/Jenkinsfile-Nimbus')
+          }
+        }
+      }
+
   # ── Infrastructure pipeline — deploys EKS cluster + full platform ──
   - script: >
       pipelineJob('nimbus-infrastructure') {

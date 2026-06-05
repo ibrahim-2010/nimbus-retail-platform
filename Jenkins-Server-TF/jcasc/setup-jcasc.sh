@@ -186,7 +186,7 @@ fi
 echo -e "${YELLOW}Downloading full JCasC config from GitHub...${NC}"
 sudo wget -q -O /var/lib/jenkins/casc_configs/jenkins.yaml \
   "https://raw.githubusercontent.com/ibrahim-2010/nimbus-retail-platform/main/Jenkins-Server-TF/jcasc/jenkins.yaml" \
-  && echo "  jenkins.yaml downloaded (8 jobs)" \
+  && echo "  jenkins.yaml downloaded (7 jobs)" \
   || echo -e "${RED}  WARNING: Download failed — Jenkins will start with minimal 2-job config${NC}"
 sudo chown jenkins:jenkins /var/lib/jenkins/casc_configs/jenkins.yaml
 
@@ -242,7 +242,7 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
   echo "  ✅ 6 credentials (github-creds, github-token, ACCOUNT_ID, ECR repos, sonar)"
   echo "  ✅ SonarQube server (via Groovy init script)"
   echo "  ✅ SonarQube webhook (http://${PRIVATE_IP}:8080/sonarqube-webhook/)"
-  echo "  ✅ 6 pipeline jobs (nimbus-infrastructure, 5x nimbus-*-service)"
+  echo "  ✅ 7 pipeline jobs (nimbus-infrastructure, 6x nimbus-*-service)"
   echo "  ✅ AWS CLI configured (instance role or explicit credentials)"
   echo "  ✅ jenkins user shell set to bash — direct SSH enabled"
   echo "  ✅ jenkins user added to docker group — no sudo docker needed"
