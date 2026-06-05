@@ -89,9 +89,30 @@ resource "helm_release" "nvidia_device_plugin" {
           effect   = "NoSchedule"
         }
       ]
-      # Chart 0.17.0 defaults to NFD-based nodeAffinity (feature.node.kubernetes.io/pci-10de.present).
-      # NFD is not deployed in this cluster, so override affinity to match our workload=gpu node label.
+      # Chart 0.17.0 generates NFD-based nodeAffinity by default
+      # (feature.node.kubernetes.io/pci-10de.present, cpu-model.vendor_id=NVIDIA, nvidia.com/gpu.present).
+      # NFD is not deployed in this cluster so those labels never appear, leaving DESIRED=0.
+      # affineToTaintsAndTolerations=false does NOT suppress this affinity — it only controls
+      # affinity auto-generated from the tolerations list.
+      # Explicit affinity override pins scheduling to our workload=gpu node label instead.
       affineToTaintsAndTolerations = false
+      affinity = {
+        nodeAffinity = {
+          requiredDuringSchedulingIgnoredDuringExecution = {
+            nodeSelectorTerms = [
+              {
+                matchExpressions = [
+                  {
+                    key      = "workload"
+                    operator = "In"
+                    values   = ["gpu"]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
     })
   ]
 
