@@ -79,6 +79,9 @@ resource "helm_release" "nvidia_device_plugin" {
 
   values = [
     yamlencode({
+      nodeSelector = {
+        workload = "gpu"
+      }
       tolerations = [
         {
           key      = "nvidia.com/gpu"
@@ -86,6 +89,9 @@ resource "helm_release" "nvidia_device_plugin" {
           effect   = "NoSchedule"
         }
       ]
+      # Chart 0.17.0 defaults to NFD-based nodeAffinity (feature.node.kubernetes.io/pci-10de.present).
+      # NFD is not deployed in this cluster, so override affinity to match our workload=gpu node label.
+      affineToTaintsAndTolerations = false
     })
   ]
 
