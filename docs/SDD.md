@@ -4,13 +4,13 @@
 **Author:** Ibrahim Jinadu  
 **AWS Account:** 022374769206  
 **Region:** us-east-1  
-**Status:** Complete (All Phases — 1, 2, 3)  
+**Status:** Complete (All Phases – 1, 2, 3)  
 
 ---
 
 ## 1. Executive Summary
 
-NimbusRetail is a cloud-native e-commerce platform consisting of six microservices deployed on Amazon EKS. The platform team is responsible for taking developer-provided application code to production with the operational, observability, and security layers a real platform team would build around it. Phase 3 extended the platform with an **AI operator copilot** — a self-hosted LLM agent (Anthropic Claude + Ollama on a dedicated NVIDIA T4 GPU node) that answers natural-language questions about platform health.
+NimbusRetail is a cloud-native e-commerce platform consisting of six microservices deployed on Amazon EKS. The platform team is responsible for taking developer-provided application code to production with the operational, observability, and security layers a real platform team would build around it. Phase 3 extended the platform with an **AI operator copilot** – a self-hosted LLM agent (Anthropic Claude + Ollama on a dedicated NVIDIA T4 GPU node) that answers natural-language questions about platform health.
 
 The platform delivers:
 - **Zero-downtime deployments** via ArgoCD GitOps with Helm rolling updates
@@ -35,7 +35,7 @@ The platform delivers:
 | order-service | Node.js / Express | 3004 | Order creation, Kafka producer |
 | notification-service | Node.js | 3005 | Kafka consumer, mock email dispatch |
 | audit-service | Node.js / Express | 3006 | Audit log ingestion, health + metrics endpoints |
-| **operator-copilot** | Node.js | 3000 | AI agent — natural-language platform health queries via Anthropic Claude + Ollama |
+| **operator-copilot** | Node.js | 3000 | AI agent – natural-language platform health queries via Anthropic Claude + Ollama |
 | **Ollama** | Go | 11434 | Local LLM inference server on GPU node (NVIDIA T4) |
 
 ### 2.2 Communication Patterns
@@ -101,7 +101,7 @@ EKS Nodes (private subnets: 10.0.3.0/24, 10.0.4.0/24)
     ├── monitoring namespace (Prometheus, Grafana, Loki, Tempo)
     ├── argocd namespace
     ├── kyverno namespace
-    ├── ai namespace (Ollama — GPU node)
+    ├── ai namespace (Ollama – GPU node)
     └── operator-copilot namespace (AI agent)
     │
     ├── RDS PostgreSQL (private subnet, port 5432)
@@ -368,7 +368,7 @@ Seven `PrometheusRule` alerts defined (`Kubernetes-Manifests-file/Monitoring/nim
 | Instance type | g4dn.xlarge | 4 vCPU, 16 GiB RAM, 1× NVIDIA T4 (16 GiB VRAM). Minimum GPU instance with sufficient VRAM for small LLMs. |
 | Capacity type | ON_DEMAND | Spot interruption would evict Ollama mid-inference; ON_DEMAND preferred for demo stability. |
 | Taint | `nvidia.com/gpu=true:NoSchedule` | Prevents CPU workloads from landing on the expensive GPU node. |
-| Scale-to-zero | `desiredSize=0` between demos | ~$0.526/hr — scale up only for active demo sessions. |
+| Scale-to-zero | `desiredSize=0` between demos | ~$0.526/hr – scale up only for active demo sessions. |
 
 ### 10.2 RDS PostgreSQL
 
@@ -479,5 +479,5 @@ Full rationale for each decision: see `docs/ADRs/`.
 | Alertmanager routing | Alerts fire to Alertmanager but no receiver (Slack/PagerDuty) is configured |
 | Jenkins SSH exposure | SSH currently defaults to `0.0.0.0/0` unless `ssh_allowed_cidr` is set in `terraform.tfvars` before provisioning |
 | No PR-gated deployments | Jenkins triggers on any push to main; a PR review gate before merging would add a human approval step |
-| audit-service source stub | `services/audit-service/` is a minimal Express stub — not yet in nimbus-retail-starter; Jenkins pipeline skips SonarQube until full implementation added |
+| audit-service source stub | `services/audit-service/` is a minimal Express stub – not yet in nimbus-retail-starter; Jenkins pipeline skips SonarQube until full implementation added |
 | operator-copilot manual build | No Jenkins job for operator-copilot; image must be built and pushed manually from the Jenkins server on each deployment |

@@ -73,7 +73,7 @@ server_params = StdioServerParameters(
 **Symptom:** API returned a 404/not-found error on startup.
 **Error:**
 ```
-model: claude-3-5-sonnet-latest — model not found
+model: claude-3-5-sonnet-latest – model not found
 ```
 
 **Root Cause:**
@@ -128,7 +128,7 @@ import asyncio
 from operator_copilot.tools.k8s import list_pods
 print(asyncio.run(list_pods()))
 "
-# Output: pods listed correctly — confirmed K8s API works, problem is stdout
+# Output: pods listed correctly – confirmed K8s API works, problem is stdout
 ```
 
 **Solution:**
@@ -208,7 +208,7 @@ UnfulfillableCapacity – Unable to fulfill capacity due to your request configu
 ```
 
 **Root Cause:**
-`capacity_type = "SPOT"` with `g4dn.xlarge` — AWS had no available spot capacity for this instance type in `us-east-1a` / `us-east-1b`.
+`capacity_type = "SPOT"` with `g4dn.xlarge` – AWS had no available spot capacity for this instance type in `us-east-1a` / `us-east-1b`.
 
 **Resolution:**
 Set `gpu_node_desired_size = 0` to stop provisioning attempts. Submitted AWS Service Quotas increase request for `Running On-Demand G and VT instances` (quota code `L-DB2E81BA`) to 4 vCPUs, then changed `capacity_type` to `"ON_DEMAND"`.
@@ -222,11 +222,11 @@ Set `gpu_node_desired_size = 0` to stop provisioning attempts. Submitted AWS Ser
 **Error:**
 ```
 Error: waiting for EKS Node Group (nimbus-cluster:gpu-nodes) create: unexpected state 'CREATE_FAILED'.
-VcpuLimitExceeded — current vCPU limit of 0 for G and VT instance bucket.
+VcpuLimitExceeded – current vCPU limit of 0 for G and VT instance bucket.
 ```
 
 **Root Cause:**
-G-series vCPU on-demand quota was 0 on this account (default for new accounts). Spot and on-demand quotas are tracked separately — the initial approval was for on-demand, so the SPOT node group still hit `MaxSpotInstanceCountExceeded`.
+G-series vCPU on-demand quota was 0 on this account (default for new accounts). Spot and on-demand quotas are tracked separately – the initial approval was for on-demand, so the SPOT node group still hit `MaxSpotInstanceCountExceeded`.
 
 **Resolution:**
 1. Escalated to AWS support (initial automatic rejection, appealed with use case detail).
@@ -255,8 +255,8 @@ Chart version 0.17.0 requires Node Feature Discovery (NFD) labels by default. Th
 
 NFD is not deployed in this cluster, so none of these labels exist on the GPU node.
 
-**First fix (partial — see Issue 12 for full resolution):**
-Added `affineToTaintsAndTolerations = false` to the Helm values in `gpu-node-group.tf`, believing this would suppress the NFD nodeAffinity. It did not — this parameter only controls affinity auto-generated from the tolerations list, not the hardcoded NFD affinity in the chart template.
+**First fix (partial – see Issue 12 for full resolution):**
+Added `affineToTaintsAndTolerations = false` to the Helm values in `gpu-node-group.tf`, believing this would suppress the NFD nodeAffinity. It did not – this parameter only controls affinity auto-generated from the tolerations list, not the hardcoded NFD affinity in the chart template.
 
 **Immediate workaround applied:**
 ```bash
@@ -271,7 +271,7 @@ kubectl label node <gpu-node> feature.node.kubernetes.io/pci-10de.present=true
 **Symptom:** After cluster destroy and redeploy, the operator-copilot pod went into `ImagePullBackOff`. The ECR repository `operator-copilot` no longer existed.
 
 **Root Cause:**
-`destroy.sh` Phase 10 explicitly deletes the `operator-copilot` ECR repository. The repository was originally created manually — it was never in Terraform. After every destroy+redeploy cycle, the repo was gone and image pushes failed.
+`destroy.sh` Phase 10 explicitly deletes the `operator-copilot` ECR repository. The repository was originally created manually – it was never in Terraform. After every destroy+redeploy cycle, the repo was gone and image pushes failed.
 
 **Solution:**
 Added `aws_ecr_repository.operator_copilot` and `aws_ecr_lifecycle_policy.operator_copilot` to `ecr.tf`. The repository is now created automatically by the Infrastructure pipeline on every fresh deployment.
@@ -280,7 +280,7 @@ Added `aws_ecr_repository.operator_copilot` and `aws_ecr_lifecycle_policy.operat
 
 ---
 
-## Issue 12 – nvidia-device-plugin DaemonSet DESIRED=0 (Attempt 2 — Permanent Fix)
+## Issue 12 – nvidia-device-plugin DaemonSet DESIRED=0 (Attempt 2 – Permanent Fix)
 
 **Component:** `helm_release.nvidia_device_plugin` in `gpu-node-group.tf`
 **Symptom:** After cluster rebuild, `DESIRED=0` persisted despite `affineToTaintsAndTolerations = false` already committed. Inspecting the live DaemonSet confirmed the NFD affinity was still present:
@@ -318,7 +318,7 @@ affinity = {
 ## Issue 13 – destroy.sh Missing Terraform State rm for Phase 3 Namespaces
 
 **Component:** `destroy.sh` Phase 9
-**Symptom:** `terraform destroy` produced errors for `kubernetes_namespace.ai` and `kubernetes_namespace.operator_copilot` — both were already deleted in Phase 6 but still in Terraform state.
+**Symptom:** `terraform destroy` produced errors for `kubernetes_namespace.ai` and `kubernetes_namespace.operator_copilot` – both were already deleted in Phase 6 but still in Terraform state.
 
 **Root Cause:**
 Phase 9 removed state for `monitoring`, `argocd`, `kafka`, and `nimbus` namespaces before running `terraform destroy`, but `ai` and `operator_copilot` (both added in Phase 3) were omitted from the `terraform state rm` block.
@@ -343,7 +343,7 @@ error: failed to create secret unknown (post secrets)
 ```
 
 **Root Cause:**
-The `operator-copilot` namespace had not been created yet at the time the secret creation was attempted. The Terraform-managed namespace resource exists in `namespaces.tf`, but Terraform must complete its apply before the namespace is available. The error message "unknown (post secrets)" is Kubernetes's way of reporting a missing namespace — it is not related to the secret value itself.
+The `operator-copilot` namespace had not been created yet at the time the secret creation was attempted. The Terraform-managed namespace resource exists in `namespaces.tf`, but Terraform must complete its apply before the namespace is available. The error message "unknown (post secrets)" is Kubernetes's way of reporting a missing namespace – it is not related to the secret value itself.
 
 **Solution:**
 Verify the namespace exists before creating the secret:
@@ -370,7 +370,7 @@ If the namespace is missing, create it manually or wait for the Infrastructure p
 Built a minimal Node.js Express service directly on the Jenkins server that satisfies the health check endpoints (`/healthz`, `/readyz`) and Prometheus metrics endpoint (`/metrics`), then pushed it manually to ECR with tag `1` (matching the pinned tag in `values-audit.yaml`).
 
 **Permanent fix required:**
-Add a full `audit-service` implementation to `nimbus-retail-starter/services/audit-service/` — a Kafka consumer that processes audit events published by the operator-copilot, with proper `/healthz`, `/readyz`, and `/metrics` endpoints.
+Add a full `audit-service` implementation to `nimbus-retail-starter/services/audit-service/` – a Kafka consumer that processes audit events published by the operator-copilot, with proper `/healthz`, `/readyz`, and `/metrics` endpoints.
 
 ---
 
@@ -380,7 +380,7 @@ Add a full `audit-service` implementation to `nimbus-retail-starter/services/aud
 **Symptom:** Jenkins had no `nimbus-audit-service` pipeline job. When `audit-service` needed to be built, there was no automated job to trigger.
 
 **Root Cause:**
-When `audit-service` was added to Phase 3, the corresponding JCasC job definition was not added to `jenkins.yaml`. The `setup-jcasc.sh` script downloads `jenkins.yaml` from GitHub on every Jenkins setup — so the missing job was propagated to every fresh Jenkins deployment.
+When `audit-service` was added to Phase 3, the corresponding JCasC job definition was not added to `jenkins.yaml`. The `setup-jcasc.sh` script downloads `jenkins.yaml` from GitHub on every Jenkins setup – so the missing job was propagated to every fresh Jenkins deployment.
 
 **Solution:**
 Added `nimbus-audit-service` pipeline job to `jenkins.yaml` following the same pattern as the other five service jobs, with `audit-service` as the default `SERVICE_NAME` parameter.
@@ -419,8 +419,8 @@ Added `nimbus-audit-service` pipeline job to `jenkins.yaml` following the same p
 | All 15 ArgoCD applications | Synced / Healthy |
 | auth, catalog, cart, order, notification services | Green |
 | audit-service | Green (minimal placeholder image, tag 1) |
-| operator-copilot AI agent | Green — running, API key injected via secret |
-| Ollama (self-hosted LLM) | Green — Tesla T4 detected, CUDA v12, 14.6 GiB VRAM |
+| operator-copilot AI agent | Green – running, API key injected via secret |
+| Ollama (self-hosted LLM) | Green – Tesla T4 detected, CUDA v12, 14.6 GiB VRAM |
 | GPU node (g4dn.xlarge ON_DEMAND) | Ready, `nvidia.com/gpu=1` registered |
 | nvidia-device-plugin DaemonSet | DESIRED=1, READY=1 |
 | Observability (Prometheus, Grafana, Loki, Tempo) | Green |

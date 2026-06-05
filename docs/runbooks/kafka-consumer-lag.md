@@ -2,7 +2,7 @@
 
 **Service affected:** notification-service (consumer group: `notification-service-group`)  
 **Topic:** `orders.created`  
-**Severity:** High — unfulfilled orders mean customers receive no confirmation  
+**Severity:** High – unfulfilled orders mean customers receive no confirmation  
 **On-call escalation:** If lag exceeds 10,000 messages or does not decrease within 15 minutes of remediation, escalate to the platform lead.
 
 ---
@@ -22,13 +22,13 @@ lag = end_offset - committed_offset   (per partition, summed across all partitio
 ### Grafana (preferred)
 Open the **NimbusRetail Kafka** dashboard → panel **Consumer Lag by Group**. Filter by group `notification-service-group` and topic `orders.created`. A rising slope that does not level off is the signal.
 
-### kubectl — check consumer pods
+### kubectl – check consumer pods
 ```bash
 kubectl get pods -n nimbus -l app=notification-service
 ```
 Expected: all pods `Running`, `READY 1/1`, low restart count.
 
-If pods are absent, in `CrashLoopBackOff`, or in `Pending`, the consumer is not running — that is the cause.
+If pods are absent, in `CrashLoopBackOff`, or in `Pending`, the consumer is not running – that is the cause.
 
 ### Strimzi kafka-consumer-groups (run from a Kafka client pod)
 ```bash
@@ -79,7 +79,7 @@ Common causes:
 - Downstream call (email/SMS API) is slow or timing out → logs will show repeated timeout errors
 - CPU throttling → `kubectl top` shows CPU near the limit; increase `resources.limits.cpu`
 
-### C. Producer spike — lag is growing faster than normal
+### C. Producer spike – lag is growing faster than normal
 
 ```bash
 # Count messages produced in the last minute
@@ -168,5 +168,5 @@ Success criterion: `LAG` column decreasing each iteration, reaching 0.
 
 1. Record the incident in the team log with: start time, cause, action taken, time to resolution.
 2. If caused by a pod crash, open a ticket to fix the root cause before closing.
-3. If consumer throughput was the bottleneck, consider increasing the partition count on `orders.created` (requires coordination with order-service team — partition changes are destructive if done wrong).
+3. If consumer throughput was the bottleneck, consider increasing the partition count on `orders.created` (requires coordination with order-service team – partition changes are destructive if done wrong).
 4. Check Grafana for any downstream impact: order completion rate, email delivery rate.

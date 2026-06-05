@@ -1,9 +1,9 @@
 # Pilot 2 Report: Self-Hosted LLM vs Anthropic API
 
-**Environment:** NimbusRetail EKS cluster — g4dn.xlarge spot node (1x NVIDIA T4, 16 GB VRAM)  
+**Environment:** NimbusRetail EKS cluster – g4dn.xlarge spot node (1x NVIDIA T4, 16 GB VRAM)  
 **Self-hosted model:** Ollama 0.5.4 running `llama3.2:3b` (4-bit quantised, ~2 GB on disk)  
 **API model:** `claude-haiku-4-5` (Anthropic)  
-**Benchmark script:** `scripts/benchmark-llm.py` — 10 warm iterations after one warm-up call  
+**Benchmark script:** `scripts/benchmark-llm.py` – 10 warm iterations after one warm-up call  
 **Prompt:** "In two sentences, explain what a Kubernetes NetworkPolicy does and give one example use case."
 
 ---
@@ -16,9 +16,9 @@
 | p95 latency | ~5.1 s | ~1.4 s | API |
 | p99 latency | ~6.3 s | ~1.8 s | API |
 | First-token latency | ~0.4 s | ~0.3 s | API (marginal) |
-| Throughput (tokens/sec) | ~45 tok/s | N/A (not exposed) | — |
+| Throughput (tokens/sec) | ~45 tok/s | N/A (not exposed) | – |
 | Cost per 1,000 output tokens | ~$0.0003* | ~$0.00125** | Self-hosted |
-| Output quality (subjective) | Adequate — concise, occasionally misses nuance | High — precise, well-structured | API |
+| Output quality (subjective) | Adequate – concise, occasionally misses nuance | High – precise, well-structured | API |
 
 \* Ollama cost = g4dn.xlarge spot ($0.19/hr) ÷ throughput. At 45 tok/s sustained the node produces ~162,000 tokens/hr → $0.00117 per 1,000 tokens. With the model idle 80% of the time (realistic for a capstone demo) amortised cost rises to ~$0.006 per 1,000 tokens. At full utilisation self-hosted wins on cost; at low utilisation the API is cheaper.
 
@@ -74,11 +74,11 @@ For the operator copilot use case (Pilot 3), quality matters more than cost per 
 
 | Use case | Recommendation |
 |---|---|
-| On-call operator copilot (Pilot 3) | **API** — latency and quality dominate; wrong advice is expensive |
-| Batch log summarisation (high volume, overnight) | **Self-hosted** — throughput at low cost once the node is already running |
-| Sensitive data / air-gapped env | **Self-hosted** — data never leaves the cluster |
-| Dev/test tool (low QPS) | **API** — cheaper than keeping a GPU node warm |
-| High-QPS inference (>500k tokens/month) | **Self-hosted** — breaks even and scales horizontally with partition count |
+| On-call operator copilot (Pilot 3) | **API** – latency and quality dominate; wrong advice is expensive |
+| Batch log summarisation (high volume, overnight) | **Self-hosted** – throughput at low cost once the node is already running |
+| Sensitive data / air-gapped env | **Self-hosted** – data never leaves the cluster |
+| Dev/test tool (low QPS) | **API** – cheaper than keeping a GPU node warm |
+| High-QPS inference (>500k tokens/month) | **Self-hosted** – breaks even and scales horizontally with partition count |
 
 ---
 

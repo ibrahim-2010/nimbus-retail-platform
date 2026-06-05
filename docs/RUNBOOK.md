@@ -278,7 +278,7 @@ aws eks update-nodegroup-config \
   --region us-east-1
 ```
 
-> **operator-copilot** will show `Degraded` in ArgoCD when the GPU node is at 0 — that is expected. The app deployment stays in place; the pod is simply unschedulable until the node comes back.
+> **operator-copilot** will show `Degraded` in ArgoCD when the GPU node is at 0 – that is expected. The app deployment stays in place; the pod is simply unschedulable until the node comes back.
 
 ---
 

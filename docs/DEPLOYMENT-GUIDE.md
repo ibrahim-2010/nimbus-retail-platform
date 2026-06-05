@@ -291,7 +291,7 @@ nimbus-operator-copilot      Synced        Healthy
 ```
 
 > **GPU apps (Ollama, operator-copilot):** Require the GPU node group to have `desiredSize >= 1`.
-> If GPU nodes are scaled to 0, these apps will show `Degraded` — that is expected. Scale up before demos:
+> If GPU nodes are scaled to 0, these apps will show `Degraded` – that is expected. Scale up before demos:
 > ```bash
 > aws eks update-nodegroup-config \
 >   --cluster-name nimbus-cluster --nodegroup-name gpu-nodes \
@@ -316,7 +316,7 @@ Still in Jenkins – run each job once (**Build with Parameters → Build**):
 | Job | Service built |
 |---|---|
 | `nimbus-auth-service` | auth-service |
-| `nimbus-audit-service` | audit-service (minimal stub — see note below) |
+| `nimbus-audit-service` | audit-service (minimal stub – see note below) |
 | `nimbus-catalog-service` | catalog-service |
 | `nimbus-cart-service` | cart-service |
 | `nimbus-order-service` | order-service |
@@ -334,13 +334,13 @@ In ArgoCD, all service apps show `Running 1/1` after the rollout completes.
 > (the `services/audit-service/` source is not yet in the app repo). The `nimbus-audit-service`
 > Jenkins pipeline will fail at the SonarQube stage until real source code is added to
 > `nimbus-retail-starter/services/audit-service/`. For demos, nimbus-audit is already Healthy
-> because image `:1` is already in ECR — skip this job for now.
+> because image `:1` is already in ECR – skip this job for now.
 
 ---
 
 ### Step 7b – Build Operator-Copilot (Manual)
 
-operator-copilot is not in the Jenkins JCasC jobs — it requires a manual build because it needs your `ANTHROPIC_API_KEY` secret. Run these commands **on the Jenkins server** (SSH in as `jenkins` user first):
+operator-copilot is not in the Jenkins JCasC jobs – it requires a manual build because it needs your `ANTHROPIC_API_KEY` secret. Run these commands **on the Jenkins server** (SSH in as `jenkins` user first):
 
 ```bash
 ssh -i ../test.pem jenkins@<JENKINS_IP>
@@ -377,7 +377,7 @@ docker push \
 kubectl get namespace operator-copilot 2>/dev/null \
   || kubectl create namespace operator-copilot
 
-# Create secret — paste your actual Anthropic API key
+# Create secret – paste your actual Anthropic API key
 kubectl create secret generic operator-copilot-secrets \
   --namespace operator-copilot \
   --from-literal=ANTHROPIC_API_KEY=<your-anthropic-api-key>
